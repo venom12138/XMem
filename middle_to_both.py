@@ -45,11 +45,13 @@ config = {
 
 network = XMem(config, './saves/XMem.pth').eval().to(device)
 
-mask_save_path = './data/P01/forward_masks/P01_01'
-draw_save_path = './data/P01/forward_draws/P01_01'
-video_path = '/cluster/home2/yjw/venom/XMem/data/P01/positive_frames/P01_01/37'
+mask_save_path = './data/P04/middle_masks/P04_01'
+draw_save_path = './data/P04/middle_draws/P04_01'
+mask_frame = 'frame_0000042799.jpg'
+video_uid = 8082
+video_path = f'/cluster/home2/yjw/venom/XMem/data/P04/positive_frames/P04_01/{video_uid}'
 # use first mask
-mask_name = '/cluster/home2/yjw/venom/EPIC-data/data/P01/first_last_masks/P01_01/37/frame_0000006341.jpg'
+mask_name = f'/cluster/home2/yjw/venom/EPIC-data/data/P04/first_last_masks/P04_01/{video_uid}/{mask_frame}'
 uid = video_path.split('/')[-1]
 
 if not os.path.isdir(f"{mask_save_path}/{uid}"):
@@ -71,17 +73,24 @@ processor.set_all_labels(range(1, num_objects+1)) # consecutive labels
 # cap = cv2.VideoCapture(video_name)
 
 # You can change these two numbers
-frames_to_propagate = 1000
+frames_to_propagate = 200
 visualize_every = 20
 
-current_frame_index = 0
+
+frame_list = sorted(glob.glob(f'{video_path}/*.jpg'))
+mid_pos = frame_list.index(f'{video_path}/{mask_frame}')
+
+frames_before = frame_list[:mid_pos+1]
+frames_after = frame_list[mid_pos:]
 
 with torch.cuda.amp.autocast(enabled=True):
-    for frame_path in sorted(glob.glob(f'{video_path}/*.jpg')):
+    current_frame_index = 0
+    for frame_path in list(reversed(frames_before)):
         # load frame-by-frame
         frame = np.array(Image.open(frame_path))
         # plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", frame)
         print(frame_path)
+        
         if frame is None or current_frame_index > frames_to_propagate:
             break
 
@@ -110,9 +119,46 @@ with torch.cuda.amp.autocast(enabled=True):
         plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", visualization)
 
         current_frame_index += 1
+
+    current_frame_index = 0
+    for frame_path in frames_after:
+        # load frame-by-frame
+        frame = np.array(Image.open(frame_path))
+        # plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", frame)
+        print(frame_path)
+        
+        if frame is None or current_frame_index > frames_to_propagate:
+            break
+
+        # convert numpy array to pytorch tensor format
+        frame_torch, _ = image_to_torch(frame, device=device)
+        if current_frame_index == 0:
+            # initialize with the mask
+            mask_torch = index_numpy_to_one_hot_torch(mask, num_objects+1).to(device)
+            
+            # the background mask is not fed into the model
+            prediction = processor.step(frame_torch, mask_torch[1:])
+        else:
+            # propagate only
+            prediction = processor.step(frame_torch)
+
+        # argmax, convert to numpy
+        # 0,1
+        prediction = torch_prob_to_numpy_mask(prediction)
+        
+        # plt.imsave(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1]}", prediction*255)
+        
+        # if current_frame_index % visualize_every == 0:
+        visualization = overlay_davis(frame, prediction)
+            # print(prediction.shape)
+            # print(visualization.shape)
+        plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", visualization)
+
+        current_frame_index += 1
+        
 import imageio.v2 as imageio
 images = []
 for frame_path in sorted(glob.glob(f'{draw_save_path}/{uid}/*.jpg')):
     im = imageio.imread(frame_path)
     images.append(im)
-imageio.mimsave(f"/cluster/home2/yjw/venom/EPIC-data/data/P01/forward_gif/{uid}.gif", images, 'GIF', duration=0.05)
+imageio.mimsave(f"/cluster/home2/yjw/venom/EPIC-data/data/P04/mid_gif/{uid}.gif", images, 'GIF', duration=0.05)

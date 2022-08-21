@@ -78,7 +78,7 @@ def get_visualization_torch(mode, image, prob, layer, target_object):
 def overlay_davis(image, mask, alpha=0.5, fade=False):
     """ Overlay segmentation on top of RGB image. from davis official"""
     im_overlay = image.copy()
-
+    # [256,3] [256,456]
     colored_mask = color_map_np[mask]
     foreground = image*alpha + (1-alpha)*colored_mask
     binary_mask = (mask > 0)

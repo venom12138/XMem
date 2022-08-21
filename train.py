@@ -17,7 +17,6 @@ from util.logger import TensorboardLogger
 from util.configuration import Configuration
 from util.load_subset import load_sub_davis, load_sub_yv
 
-
 """
 Initial setup
 """

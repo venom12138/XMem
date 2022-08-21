@@ -29,7 +29,7 @@ class XMemTrainer:
             XMem(config).cuda(), 
             device_ids=[local_rank], output_device=local_rank, broadcast_buffers=False)
 
-        # Set up logger when local_rank=0
+        # Set up logger when local_rank = 0
         self.logger = logger
         self.save_path = save_path
         if logger is not None:

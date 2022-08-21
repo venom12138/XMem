@@ -45,12 +45,12 @@ config = {
 
 network = XMem(config, './saves/XMem.pth').eval().to(device)
 
-mask_save_path = './data/P04/backward_masks/P04_01'
-draw_save_path = './data/P04/backward_draws/P04_01'
+mask_save_path = './data/P01/backward_masks/P01_01'
+draw_save_path = './data/P01/backward_draws/P01_01'
 # TODO: make this a command line argument
-video_path = '/cluster/home2/yjw/venom/XMem/data/P04/positive_frames/P04_01/7991'
+video_path = '/cluster/home2/yjw/venom/XMem/data/P01/positive_frames/P01_01/37'
 # use last mask
-mask_name = '/cluster/home2/yjw/venom/EPIC-data/data/P04/first_last_masks/P04_01/7991/frame_0000021333.jpg'
+mask_name = '/cluster/home2/yjw/venom/EPIC-data/data/P01/first_last_masks/P01_01/37/frame_0000007320.jpg'
 uid = video_path.split('/')[-1]
 
 if not os.path.isdir(f"{mask_save_path}/{uid}"):
@@ -72,7 +72,7 @@ processor.set_all_labels(range(1, num_objects+1)) # consecutive labels
 # cap = cv2.VideoCapture(video_name)
 
 # You can change these two numbers
-frames_to_propagate = 200
+frames_to_propagate = 1000
 visualize_every = 20
 
 current_frame_index = 0
@@ -111,9 +111,9 @@ with torch.cuda.amp.autocast(enabled=True):
         plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", visualization)
 
         current_frame_index += 1
-import imageio
+import imageio.v2 as imageio
 images = []
 for frame_path in sorted(glob.glob(f'{draw_save_path}/{uid}/*.jpg')):
     im = imageio.imread(frame_path)
     images.append(im)
-imageio.mimsave(f"/cluster/home2/yjw/venom/EPIC-data/data/P04/backward_gif/{uid}.gif", images, 'GIF', duration=0.05)
+imageio.mimsave(f"/cluster/home2/yjw/venom/EPIC-data/data/P01/backward_gif/{uid}.gif", images, 'GIF', duration=0.05)
