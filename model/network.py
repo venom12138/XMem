@@ -15,7 +15,7 @@ import torch.nn as nn
 from aggregate import aggregate
 from modules import *
 from memory_util import *
-
+from torchsummary import summary
 class XMem(nn.Module):
     def __init__(self, config, model_path=None, map_location=None):
         """
@@ -28,10 +28,11 @@ class XMem(nn.Module):
         self.single_object = config.get('single_object', False)
         print(f'Single object mode: {self.single_object}')
 
-        self.key_encoder = KeyEncoder()
+        self.key_encoder = KeyEncoder() # R50 前三个stage: 
         self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)
 
         # Projection from f16 feature space to key/value space
+        # indim:1024,即f16；outdim:key_dim
         self.key_proj = KeyProjection(1024, self.key_dim)
 
         self.decoder = Decoder(self.value_dim, self.hidden_dim)
@@ -41,23 +42,30 @@ class XMem(nn.Module):
 
     def encode_key(self, frame, need_sk=True, need_ek=True): 
         # Determine input shape
+        # frame:[B, num_frames, C, H, W]
+        # num_frames is t
         if len(frame.shape) == 5:
             # shape is b*t*c*h*w
+            # 需要reshape回去
             need_reshape = True
             b, t = frame.shape[:2]
             # flatten so that we can feed them into a 2D CNN
+            # frame:[B, num_frames, C, H, W] -> [B*num_frames, C, H, W]
             frame = frame.flatten(start_dim=0, end_dim=1)
         elif len(frame.shape) == 4:
             # shape is b*c*h*w
             need_reshape = False
         else:
             raise NotImplementedError
-    
+        # f16:[B*num_frames, 1024, H//16, W//16]
         f16, f8, f4 = self.key_encoder(frame)
+        # key:[B*num_frames, key_dim, H//16, W//16]
+        # shrinkage:[B*num_frames, 1, H//16, W//16]
+        # selection:[B*num_frames, key_dim, H//16, W//16]
         key, shrinkage, selection = self.key_proj(f16, need_sk, need_ek)
-
+        # 需要reshape回去
         if need_reshape:
-            # B*C*T*H*W
+            # B*key_dim*T*H//16*W//16
             key = key.view(b, t, *key.shape[-3:]).transpose(1, 2).contiguous()
             if shrinkage is not None:
                 shrinkage = shrinkage.view(b, t, *shrinkage.shape[-3:]).transpose(1, 2).contiguous()
@@ -72,8 +80,13 @@ class XMem(nn.Module):
         return key, shrinkage, selection, f16, f8, f4
 
     def encode_value(self, frame, image_feat_f16, h16, masks, is_deep_update=True): 
+        # masks:[B, max_obj_num, H, W]
+        # num_objects is max_obj_num
+        # masks就是first_frame_gt是one-hot的，所以others就是一大堆1，把其他的object给mask出来了
         num_objects = masks.shape[1]
         if num_objects != 1:
+            # others就是除了第i个object之外的所有object sum起来
+            # others:[B, max_obj_num, H, W]
             others = torch.cat([
                 torch.sum(
                     masks[:, [j for j in range(num_objects) if i!=j]]
@@ -97,9 +110,11 @@ class XMem(nn.Module):
         memory_shrinkage: B * 1  * T * H * W
         memory_value    : B * num_objects * CV * T * H * W
         """
+        # T就是num_ref_frames
+        # num_objects就是max_obj_num
         batch_size, num_objects = memory_value.shape[:2]
         memory_value = memory_value.flatten(start_dim=1, end_dim=2)
-
+        # query selection是key_proj之后的结果，是一个[B, CK, H, W]的tensor
         affinity = get_affinity(memory_key, memory_shrinkage, query_key, query_selection)
         memory = readout(affinity, memory_value)
         memory = memory.view(batch_size, num_objects, self.value_dim, *memory.shape[-2:])

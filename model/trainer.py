@@ -10,7 +10,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-sys.path.append('../')
+import git
+import datetime
+# TODO change to relative path
+sys.path.append('/home/venom/projects/XMem/')
+print(sys.path)
 # from model.network import XMem
 # from model.losses import LossComputer
 from network import XMem
@@ -18,6 +22,8 @@ from losses import LossComputer
 from util.log_integrator import Integrator
 from util.image_saver import pool_pairs
 from util.configuration import Configuration
+from util.logger import TensorboardLogger
+import resnet
 
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
@@ -66,25 +72,46 @@ class XMemTrainer:
                 data[k] = v.cuda(non_blocking=True)
 
         out = {}
+        # [b, num_frames, 3, H, W]
         frames = data['rgb']
+        # [b, 1, max_num_obj, H, W]
         first_frame_gt = data['first_frame_gt'].float()
         b = frames.shape[0]
+        # data['info']['num_objects']: [], len=b, 每一个数代表每一个clip的object数量
         num_filled_objects = [o.item() for o in data['info']['num_objects']]
+        # 此处的num_objects是max_num_obj，而不是每一个clip的object数量
         num_objects = first_frame_gt.shape[2]
         selector = data['selector'].unsqueeze(2).unsqueeze(2)
 
         with torch.cuda.amp.autocast(enabled=self.config['amp']):
             # image features never change, compute once
+            # frames:[B,num_frames,C,H,W]
+            # key:[B, key_dim, num_frames, H//16, W//16]
+            # shrinkage:[B, num_frames, 1, H//16, W//16]
+            # selection:[B, num_frames, key_dim, H//16, W//16]
+            # f16:[B, num_frames, 1024, H//16, W//16]
+            # f8:[B, num_frames, 512, H//8, W//8]
+            # f4:[B, num_frames, 256, H//4, W//4]
             key, shrinkage, selection, f16, f8, f4 = self.XMem('encode_key', frames)
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
+            # first_frame_gt[:,0]:[b, max_num_obj, H, W]
+            # hidden: [b, max_num_obj, hidden_dim, H, W]
+            # f16[:,0]: [b, 1, 1024, H//16, W//16]
+            # frames[:,0]: [b, 3, H, W]
+            # encode_value只对采样的clip中的第一个frame和mask进行计算
+            # v16:[b, max_obj_num, value_dim, H//16, W//16]
+            # hidden:[b, max_obj_num, hidden_dim, H//16, W//16]
             v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, first_frame_gt[:,0])
+            # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
-
+            
             for ti in range(1, self.num_frames):
+                # 从memory 中 选取的ref_frame
                 if ti <= self.num_ref_frames:
                     ref_values = values
+                    # 取前ti个frame的key作为ref_key
                     ref_keys = key[:,:,:ti]
                     ref_shrinkage = shrinkage[:,:,:ti] if shrinkage is not None else None
                 else:
@@ -245,12 +272,25 @@ if __name__ == '__main__':
     raw_config.parse()
     stage_config = raw_config.get_stage_parameters('0')
     config = dict(**raw_config.args, **stage_config)
+    # repo = git.Repo("..")
+    # git_info = str(repo.active_branch)+' '+str(repo.head.commit.hexsha)
+    if config['exp_id'].lower() != 'null':
+        print('I will take the role of logging!')
+        long_id = '%s_%s' % (datetime.datetime.now().strftime('%b%d_%H.%M.%S'), config['exp_id'])
+    else:
+        long_id = None
+    logger = TensorboardLogger(config['exp_id'], long_id, '123456')
+    logger.log_string('hyperpara', str(config))
     data = {
-            'rgb': torch.rand(1,3,3,384,384), # [b, num_frames, 3, H, W]
-            'first_frame_gt': torch.rand(1,1,5,384,384), # [b, 1, max_num_obj, H, W] one hot
-            'cls_gt': torch.rand(1,3,1,384,384), # [b, num_frames, 1, H, W]
-            'selector': torch.tensor([[1, 1, 1, 0, 0]]), # [b,max_num_obj] 前num_objects个是1，后面是0
-            'info': {'num_frames': torch.tensor([3]), 'num_objects': torch.tensor([3])},
+            'rgb': torch.rand(2,3,3,384,384), # [b, num_frames, 3, H, W]
+            'first_frame_gt': torch.randint(0, 1, (2,1,5,384,384)), # [b, 1, max_num_obj, H, W] one hot
+            'cls_gt': torch.randint(0,2,(2,3,1,384,384)), # [b, num_frames, 1, H, W]
+            'selector': torch.tensor([[1, 1, 1, 0, 0],[1, 1, 1, 0, 0]]), # [b,max_num_obj] 前num_objects个是1，后面是0
+            'info': {'num_frames': torch.tensor([3,3]), 'num_objects': torch.tensor([3,3])},
         }
     model = XMemTrainer(config).train()
+    network = resnet.resnet50(pretrained=False)
+    print(model.XMem)
+    print(f'----------')
+    print(network)
     model.do_pass(data, 1)

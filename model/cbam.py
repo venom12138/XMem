@@ -31,6 +31,7 @@ class ChannelGate(nn.Module):
         self.pool_types = pool_types
     def forward(self, x):
         channel_att_sum = None
+        # types: ['avg', 'max']
         for pool_type in self.pool_types:
             if pool_type=='avg':
                 avg_pool = F.avg_pool2d( x, (x.size(2), x.size(3)), stride=(x.size(2), x.size(3)))
@@ -43,12 +44,14 @@ class ChannelGate(nn.Module):
                 channel_att_sum = channel_att_raw
             else:
                 channel_att_sum = channel_att_sum + channel_att_raw
-
+        # channel_att_sum: [b*max_obj_num, 512]
+        # scale的shape是[b*max_obj_num, 512, h//16, w//16]
         scale = torch.sigmoid( channel_att_sum ).unsqueeze(2).unsqueeze(3).expand_as(x)
         return x * scale
 
 class ChannelPool(nn.Module):
     def forward(self, x):
+        # 沿着dim=1的方向取平均和最大值
         return torch.cat( (torch.max(x,1)[0].unsqueeze(1), torch.mean(x,1).unsqueeze(1)), dim=1 )
 
 class SpatialGate(nn.Module):
@@ -58,6 +61,9 @@ class SpatialGate(nn.Module):
         self.compress = ChannelPool()
         self.spatial = BasicConv(2, 1, kernel_size, stride=1, padding=(kernel_size-1) // 2)
     def forward(self, x):
+        # x: [b*max_obj_num, 512, h//16, w//16]
+        # compress就是把512维压缩到2维
+        # x_compress: [b*max_obj_num, 2, h//16, w//16]
         x_compress = self.compress(x)
         x_out = self.spatial(x_compress)
         scale = torch.sigmoid(x_out) # broadcasting
@@ -71,6 +77,8 @@ class CBAM(nn.Module):
         if not no_spatial:
             self.SpatialGate = SpatialGate()
     def forward(self, x):
+        # Spatial Gate就是把channel的信息avg了
+        # channel Gate就是把feature的h、w给avg了
         x_out = self.ChannelGate(x)
         if not self.no_spatial:
             x_out = self.SpatialGate(x_out)

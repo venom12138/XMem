@@ -11,8 +11,12 @@ def get_similarity(mk, ms, qk, qe):
     # qk: B x CK x [HW/P] - Query keys
     # qe: B x CK x [HW/P] - Query selection
     # Dimensions in [] are flattened
+    
+    # N就是T*H*W//16//16, 
+    # HW/P=H*W//16//16
     CK = mk.shape[1]
     mk = mk.flatten(start_dim=2)
+    # flatten后的ms：B x N x 1
     ms = ms.flatten(start_dim=1).unsqueeze(2) if ms is not None else None
     qk = qk.flatten(start_dim=2)
     qe = qe.flatten(start_dim=2) if qe is not None else None
@@ -21,10 +25,16 @@ def get_similarity(mk, ms, qk, qe):
         # See appendix for derivation
         # or you can just trust me ヽ(ー_ー )ノ
         mk = mk.transpose(1, 2)
+        # mk B x N x CK
+        # B x N x CK @ B x CK x HW/P = B x N x HW/P
         a_sq = (mk.pow(2) @ qe)
         two_ab = 2 * (mk @ (qk * qe))
+        # B x CK x HW/P @ B x CK x [HW/P] = B x CK x HW/P
+        # sum完 B x 1 x HW/P
         b_sq = (qe * qk.pow(2)).sum(1, keepdim=True)
-        similarity = (-a_sq+two_ab-b_sq)
+        # 合理，这里是算qk和所有T个mk之间similarity，所以sum一下，broadcast
+        # a2-2ab+b2
+        similarity = (-a_sq+two_ab-b_sq) # 这里broadcast了，but 为啥要sum？
     else:
         # similar to STCN if we don't have the selection term
         a_sq = mk.pow(2).sum(1).unsqueeze(2)

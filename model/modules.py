@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from group_modules import *
 import resnet
 from cbam import CBAM
+from torchsummary import summary
 
 class FeatureFusionBlock(nn.Module):
     def __init__(self, x_in_dim, g_in_dim, g_mid_dim, g_out_dim):
@@ -32,14 +33,16 @@ class FeatureFusionBlock(nn.Module):
 
     def forward(self, x, g):
         batch_size, num_objects = g.shape[:2]
-
+        # 将x和g cat起来
         g = self.distributor(x, g)
+        # distributor后 g:[b, max_obj_num, x_in_dim+g_in_dim, H//16, W//16]
         g = self.block1(g)
+        # 经过block1之后，g:[b, max_obj_num, g_mid_dim, H//16, W//16]
         r = self.attention(g.flatten(start_dim=0, end_dim=1))
         r = r.view(batch_size, num_objects, *r.shape[1:])
 
         g = self.block2(g+r)
-
+        # fuse之后 [b, max_obj_num, g_out_dim, H//16, W//16]
         return g
 
 
@@ -126,12 +129,17 @@ class ValueEncoder(nn.Module):
     def forward(self, image, image_feat_f16, h, masks, others, is_deep_update=True):
         # image_feat_f16 is the feature from the key encoder
         if not self.single_object:
+            # g: [b,max_num_objects,2,h,w]
+            # stack之后，g[i,j]就是第j个object和除了第j个object之外的其他object的mask cat在一起了
             g = torch.stack([masks, others], 2)
         else:
             g = masks.unsqueeze(2)
+        # 将g和image cat起来了
+        # g: [b, max_num_objects,3+2,h,w]
         g = self.distributor(image, g)
 
         batch_size, num_objects = g.shape[:2]
+        # flatten之后, g: [b*max_num_objects, 3, h, w]
         g = g.flatten(start_dim=0, end_dim=1)
 
         g = self.conv1(g)
@@ -139,14 +147,19 @@ class ValueEncoder(nn.Module):
         g = self.maxpool(g)  # 1/4, 64
         g = self.relu(g) 
 
-        g = self.layer1(g) # 1/4
-        g = self.layer2(g) # 1/8
-        g = self.layer3(g) # 1/16
+        g = self.layer1(g) # 1/4,64
+        g = self.layer2(g) # 1/8,128
+        g = self.layer3(g) # 1/16,256
 
         g = g.view(batch_size, num_objects, *g.shape[1:])
+        # fuser之前，
+        # g: [b, max_num_objects, 256, H//16, W//16]
+        # image_feat_f16: [b, 1024, H//16, W//16]
         g = self.fuser(image_feat_f16, g)
-
+        # fuse之后，
+        # g: [b, max_num_objects, value_dim, H//16, W//16]
         if is_deep_update and self.hidden_reinforce is not None:
+            # GRU
             h = self.hidden_reinforce(g, h)
 
         return g, h

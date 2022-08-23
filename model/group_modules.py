@@ -28,7 +28,10 @@ def downsample_groups(g, ratio=1/2, mode='area', align_corners=None):
 
 class GConv2D(nn.Conv2d):
     def forward(self, g):
+        # g: [b, max_obj_num, 1024+256, H//16, W//16]
         batch_size, num_objects = g.shape[:2]
+        # flatten后 g:[b*max_obj_num, 1024+256，H//16，W//16]
+        # 相当于是对每个object的feature 进行卷积
         g = super().forward(g.flatten(start_dim=0, end_dim=1))
         return g.view(batch_size, num_objects, *g.shape[1:])
 
@@ -44,7 +47,6 @@ class GroupResBlock(nn.Module):
 
         self.conv1 = GConv2D(in_dim, out_dim, kernel_size=3, padding=1)
         self.conv2 = GConv2D(out_dim, out_dim, kernel_size=3, padding=1)
- 
     def forward(self, g):
         out_g = self.conv1(F.relu(g))
         out_g = self.conv2(F.relu(out_g))
@@ -64,6 +66,7 @@ class MainToGroupDistributor(nn.Module):
         self.reverse_order = reverse_order
 
     def forward(self, x, g):
+        # num_objects是 max_obj_num
         num_objects = g.shape[1]
 
         if self.x_transform is not None:
@@ -73,6 +76,7 @@ class MainToGroupDistributor(nn.Module):
             if self.reverse_order:
                 g = torch.cat([g, x.unsqueeze(1).expand(-1,num_objects,-1,-1,-1)], 2)
             else:
+                # 把image expand成了b,max_obj_num,3,h,w
                 g = torch.cat([x.unsqueeze(1).expand(-1,num_objects,-1,-1,-1), g], 2)
         elif self.method == 'add':
             g = x.unsqueeze(1).expand(-1,num_objects,-1,-1,-1) + g
