@@ -3,19 +3,21 @@ trainer.py - warpper and utility functions for network training
 Compute loss, back-prop, update parameters, logging, etc.
 """
 
-
+import sys
 import os
 import time
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
-from model.network import XMem
-from model.losses import LossComputer
+sys.path.append('../')
+# from model.network import XMem
+# from model.losses import LossComputer
+from network import XMem
+from losses import LossComputer
 from util.log_integrator import Integrator
 from util.image_saver import pool_pairs
-
+from util.configuration import Configuration
 
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
@@ -24,11 +26,13 @@ class XMemTrainer:
         self.num_ref_frames = config['num_ref_frames']
         self.deep_update_prob = config['deep_update_prob']
         self.local_rank = local_rank
-
-        self.XMem = nn.parallel.DistributedDataParallel(
-            XMem(config).cuda(), 
-            device_ids=[local_rank], output_device=local_rank, broadcast_buffers=False)
-
+        try:
+            self.XMem = nn.parallel.DistributedDataParallel(
+                XMem(config).cuda(), 
+                device_ids=[local_rank], output_device=local_rank, broadcast_buffers=False)
+        except:
+            self.XMem = nn.parallel.DataParallel(
+                XMem(config).cuda())
         # Set up logger when local_rank = 0
         self.logger = logger
         self.save_path = save_path
@@ -103,8 +107,11 @@ class XMemTrainer:
                 # Segment frame ti
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
-                hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
-                        hidden, selector, h_out=(ti < (self.num_frames-1)))
+                # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
+                #         hidden, selector, h_out=(ti < (self.num_frames-1)))
+                args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
+                kwargs = {'h_out':(ti < (self.num_frames-1))}
+                hidden, logits, masks = self.XMem('segment', *args, **kwargs)
 
                 # No need to encode the last frame
                 if ti < (self.num_frames-1):
@@ -217,6 +224,7 @@ class XMemTrainer:
         self._is_train = True
         self._do_log = True
         self.integrator = self.train_integrator
+        # 不使用BN和dropout
         self.XMem.eval()
         return self
 
@@ -232,3 +240,17 @@ class XMemTrainer:
         self.XMem.eval()
         return self
 
+if __name__ == '__main__':
+    raw_config = Configuration()
+    raw_config.parse()
+    stage_config = raw_config.get_stage_parameters('0')
+    config = dict(**raw_config.args, **stage_config)
+    data = {
+            'rgb': torch.rand(1,3,3,384,384), # [b, num_frames, 3, H, W]
+            'first_frame_gt': torch.rand(1,1,5,384,384), # [b, 1, max_num_obj, H, W] one hot
+            'cls_gt': torch.rand(1,3,1,384,384), # [b, num_frames, 1, H, W]
+            'selector': torch.tensor([[1, 1, 1, 0, 0]]), # [b,max_num_obj] 前num_objects个是1，后面是0
+            'info': {'num_frames': torch.tensor([3]), 'num_objects': torch.tensor([3])},
+        }
+    model = XMemTrainer(config).train()
+    model.do_pass(data, 1)

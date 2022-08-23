@@ -9,17 +9,17 @@ import matplotlib.pyplot as plt
 
 
 colors = [[255,255,255],[0,0,255],[0,255,0],[255,0,0],[0,255,255],[255,0,255],[255,255,0],[0,0,0]]
-flow_dir = './data/P01/myflow_frames/P01_01/37'
+flow_dir = './data/P01/flow_frames/P01_01'# './data/P01/myflow_frames/P01_01/37'
 u_dir = flow_dir + '/u'
 v_dir = flow_dir + '/v'
-count = 0
+
 n_clusters=3
 # n_clusters={n_clusters}
-save_path = f'./data/P01/group/37/new_flow_n_clusters={n_clusters}/'
-for u_img_path in sorted(list(glob.glob(u_dir + '/*.jpg'))):
-    # if count < 21251:
-    #     count += 1
-    #     continue
+save_path = f'./data/P01/group/37/mapped_n_clusters={n_clusters}/'
+flow_idx = int(np.ceil((float(7022) - 3) / 2))
+for i, u_img_path in enumerate(sorted(list(glob.glob(u_dir + '/*.jpg')))):
+    if i < flow_idx:
+        continue
     # print(np.array(cv2.imread(u_img_path, 0)).shape)
     v_img_path = u_img_path.replace('u','v')
     u_frame = np.expand_dims(cv2.imread(u_img_path, 0),axis=2)

@@ -25,6 +25,7 @@ distributed.init_process_group(backend="nccl")
 print(f'CUDA Device count: {torch.cuda.device_count()}')
 
 # Parse command line arguments
+# config 被封装成类
 raw_config = Configuration()
 raw_config.parse()
 
@@ -53,6 +54,7 @@ for si, stage in enumerate(stages_to_perform):
 
     # Pick stage specific hyperparameters out
     stage_config = raw_config.get_stage_parameters(stage)
+    # 将configuration中的参数转换为字典
     config = dict(**raw_config.args, **stage_config)
     if config['exp_id'] != 'NULL':
         config['exp_id'] = config['exp_id']+'_s%s'%stages[:si+1]
@@ -62,6 +64,7 @@ for si, stage in enumerate(stages_to_perform):
     config['num_gpus'] = world_size
     if config['batch_size']//config['num_gpus']*config['num_gpus'] != config['batch_size']:
         raise ValueError('Batch size must be divisible by the number of GPUs.')
+    # 分配给每个GPU，每个GPU的bs、worker
     config['batch_size'] //= config['num_gpus']
     config['num_workers'] //= config['num_gpus']
     print(f'We are assuming {config["num_gpus"]} GPUs.')
@@ -120,7 +123,7 @@ for si, stage in enumerate(stages_to_perform):
         train_loader = DataLoader(dataset, config['batch_size'], sampler=train_sampler, num_workers=config['num_workers'],
                                 worker_init_fn=worker_init_fn, drop_last=True)
         return train_sampler, train_loader
-
+    # 合并数据集，youtube和davis合并
     def renew_vos_loader(max_skip, finetune=False):
         # //5 because we only have annotation for every five frames
         yv_dataset = VOSDataset(path.join(yv_root, 'JPEGImages'), 
@@ -135,7 +138,8 @@ for si, stage in enumerate(stages_to_perform):
         print(f'Renewed with {max_skip=}')
 
         return construct_loader(train_dataset)
-
+    
+    # BL 30K数据集
     def renew_bl_loader(max_skip, finetune=False):
         train_dataset = VOSDataset(path.join(bl_root, 'JPEGImages'), 
                             path.join(bl_root, 'Annotations'), max_skip, is_bl=True, num_frames=config['num_frames'], finetune=finetune)
@@ -155,6 +159,7 @@ for si, stage in enumerate(stages_to_perform):
     Not effective for stage 0 training
     The initial value is not listed here but in renew_vos_loader(X)
     """
+    # 每隔多少帧进行一次采样，curriculum learning
     max_skip_values = [10, 15, 5, 5]
 
     if stage == '0':
@@ -173,6 +178,7 @@ for si, stage in enumerate(stages_to_perform):
 
         print(f'Static dataset size: {len(train_dataset)}')
     elif stage == '1':
+        # 在训练的第10%，30%，80%的时候change max skip_values
         increase_skip_fraction = [0.1, 0.3, 0.8, 100]
         bl_root = path.join(path.expanduser(config['bl_root']))
 
@@ -187,7 +193,6 @@ for si, stage in enumerate(stages_to_perform):
 
         train_sampler, train_loader = renew_vos_loader(5)
         renew_loader = renew_vos_loader
-
 
     """
     Determine max epoch
@@ -218,6 +223,8 @@ for si, stage in enumerate(stages_to_perform):
             model.train()
             for data in train_loader:
                 # Update skip if needed
+                # 达到change skip iter之后，更新skip，右移change_skip_iter，并重新获取数据集
+                # skip是每次跳过多少帧
                 if stage!='0' and total_iter >= change_skip_iter[0]:
                     while total_iter >= change_skip_iter[0]:
                         cur_skip = max_skip_values[0]
