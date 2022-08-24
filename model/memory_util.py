@@ -45,7 +45,7 @@ def get_similarity(mk, ms, qk, qe):
         similarity = similarity * ms / math.sqrt(CK)   # B*N*HW
     else:
         similarity = similarity / math.sqrt(CK)   # B*N*HW
-
+    # similarity: B x N x [HW/P]
     return similarity
 
 def do_softmax(similarity, top_k: Optional[int]=None, inplace=False, return_usage=False):
@@ -63,9 +63,13 @@ def do_softmax(similarity, top_k: Optional[int]=None, inplace=False, return_usag
         else:
             affinity = torch.zeros_like(similarity).scatter_(1, indices, x_exp) # B*N*HW
     else:
+        # maxes: [B x 1 x HW//P]
         maxes = torch.max(similarity, dim=1, keepdim=True)[0]
+        # x_exp: [B x HW//P x HW//P]
         x_exp = torch.exp(similarity - maxes)
+        # sum: [B x 1 x HW//P]
         x_exp_sum = torch.sum(x_exp, dim=1, keepdim=True)
+        # x_exp: [B x THW//P x HW//P]
         affinity = x_exp / x_exp_sum 
         indices = None
 
@@ -81,10 +85,10 @@ def get_affinity(mk, ms, qk, qe):
     return affinity
 
 def readout(affinity, mv):
-    B, CV, T, H, W = mv.shape
+    B, CV, T, H, W = mv.shape # 这里的H和W是除以16之后的
 
     mo = mv.view(B, CV, T*H*W) 
-    mem = torch.bmm(mo, affinity)
+    mem = torch.bmm(mo, affinity) # 纯粹的矩阵乘法: B x CV x THW @ B x THW x HW = B x CV x HW
     mem = mem.view(B, CV, H, W)
 
     return mem

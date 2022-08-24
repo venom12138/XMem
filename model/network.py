@@ -115,6 +115,7 @@ class XMem(nn.Module):
         batch_size, num_objects = memory_value.shape[:2]
         memory_value = memory_value.flatten(start_dim=1, end_dim=2)
         # query selection是key_proj之后的结果，是一个[B, CK, H, W]的tensor
+        # affinity 是 [B, THW//P, HW//p]的tensor(384/16*384/16=576)
         affinity = get_affinity(memory_key, memory_shrinkage, query_key, query_selection)
         memory = readout(affinity, memory_value)
         memory = memory.view(batch_size, num_objects, self.value_dim, *memory.shape[-2:])
@@ -123,17 +124,18 @@ class XMem(nn.Module):
 
     def segment(self, multi_scale_features, memory_readout,
                     hidden_state, selector=None, h_out=True, strip_bg=True): 
-
+        # logits B x max_obj_num x 1 x H x W
+        # hidden_state B x max_obj_num x 64 x H//16 x W//16
         hidden_state, logits = self.decoder(*multi_scale_features, hidden_state, memory_readout, h_out=h_out)
-        prob = torch.sigmoid(logits)
+        prob = torch.sigmoid(logits) # B x max_obj_num x H x W
         if selector is not None:
-            prob = prob * selector
+            prob = prob * selector # selector是[B, max_obj_num, 1, 1]的tensor
             
         logits, prob = aggregate(prob, dim=1, return_logits=True)
         if strip_bg:
             # Strip away the background
             prob = prob[:, 1:]
-
+        # logits: B x max_obj_num+1 x H x W
         return hidden_state, logits, prob
 
     def forward(self, mode, *args, **kwargs):

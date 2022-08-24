@@ -137,14 +137,17 @@ class XMemTrainer:
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))
                 args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
-                kwargs = {'h_out':(ti < (self.num_frames-1))}
-                hidden, logits, masks = self.XMem('segment', *args, **kwargs)
+                kwargs = {'h_out':(ti < (self.num_frames-1))} # 最后一帧不进行update
+                # logits:B,max_obj_num+1,H,W; 
+                # masks:B,max_obj_num,H,W
+                # hidden:B,max_obj_num,hidden_dim,H//16,W//16
+                hidden, logits, masks = self.XMem('segment', *args, **kwargs) 
 
                 # No need to encode the last frame
                 if ti < (self.num_frames-1):
-                    is_deep_update = np.random.rand() < self.deep_update_prob
+                    is_deep_update = np.random.rand() < self.deep_update_prob # 50%的概率进行deep update
                     v16, hidden = self.XMem('encode_value', frames[:,ti], f16[:,ti], hidden, masks, is_deep_update=is_deep_update)
-                    values = torch.cat([values, v16.unsqueeze(3)], 3)
+                    values = torch.cat([values, v16.unsqueeze(3)], 3) # 更新后的value用于下一帧，也就是每一帧的alue都是用的上一帧的
 
                 out[f'masks_{ti}'] = masks
                 out[f'logits_{ti}'] = logits

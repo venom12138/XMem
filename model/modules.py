@@ -199,10 +199,10 @@ class UpsampleBlock(nn.Module):
         self.scale_factor = scale_factor
 
     def forward(self, skip_f, up_g):
-        skip_f = self.skip_conv(skip_f)
-        g = upsample_groups(up_g, ratio=self.scale_factor)
-        g = self.distributor(skip_f, g)
-        g = self.out_conv(g)
+        skip_f = self.skip_conv(skip_f) #  B, 512, H//8, W//8 - > B, 512, H//8, W//8
+        g = upsample_groups(up_g, ratio=self.scale_factor) # B, max_num_objects, 512, H//16, W//16 -> B, max_num_objects, 512, H//8, W//8
+        g = self.distributor(skip_f, g) # cat起来
+        g = self.out_conv(g) # B，max_num_objects, 256, H//8, W//8
         return g
 
 
@@ -242,16 +242,16 @@ class Decoder(nn.Module):
         self.pred = nn.Conv2d(256, 1, kernel_size=3, padding=1, stride=1)
 
     def forward(self, f16, f8, f4, hidden_state, memory_readout, h_out=True):
-        batch_size, num_objects = memory_readout.shape[:2]
+        batch_size, num_objects = memory_readout.shape[:2] # max_obj_num
 
         if self.hidden_update is not None:
             g16 = self.fuser(f16, torch.cat([memory_readout, hidden_state], 2))
         else:
             g16 = self.fuser(f16, memory_readout)
 
-        g8 = self.up_16_8(f8, g16)
-        g4 = self.up_8_4(f4, g8)
-        logits = self.pred(F.relu(g4.flatten(start_dim=0, end_dim=1)))
+        g8 = self.up_16_8(f8, g16) # 将f8和g16 upsample fuse一下 
+        g4 = self.up_8_4(f4, g8) # 将f4和g8 upsample fuse一下, g4: B x max_obj_num x 256 x H//4 x W//4
+        logits = self.pred(F.relu(g4.flatten(start_dim=0, end_dim=1))) # 
 
         if h_out and self.hidden_update is not None:
             g4 = torch.cat([g4, logits.view(batch_size, num_objects, 1, *logits.shape[-2:])], 2)
@@ -261,5 +261,6 @@ class Decoder(nn.Module):
         
         logits = F.interpolate(logits, scale_factor=4, mode='bilinear', align_corners=False)
         logits = logits.view(batch_size, num_objects, *logits.shape[-2:])
-
+        # logits B x max_obj_num x 1 x H x W
+        # hidden_state B x max_obj_num x 64 x H//16 x W//16
         return hidden_state, logits

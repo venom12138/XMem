@@ -5,13 +5,13 @@ import torch.nn.functional as F
 from collections import defaultdict
 
 
-def dice_loss(input_mask, cls_gt):
-    num_objects = input_mask.shape[1]
+def dice_loss(input_mask, cls_gt): # cls_gt is B x H x W
+    num_objects = input_mask.shape[1] # input_mask is B x max_obj_num x H x W
     losses = []
     for i in range(num_objects):
-        mask = input_mask[:,i].flatten(start_dim=1)
+        mask = input_mask[:,i].flatten(start_dim=1) # B x HW
         # background not in mask, so we add one to cls_gt
-        gt = (cls_gt==(i+1)).float().flatten(start_dim=1)
+        gt = (cls_gt==(i+1)).float().flatten(start_dim=1) # B x HW
         numerator = 2 * (mask * gt).sum(-1)
         denominator = mask.sum(-1) + gt.sum(-1)
         loss = 1 - (numerator + 1) / (denominator + 1)
@@ -62,7 +62,7 @@ class LossComputer:
                 losses[f'ce_loss_{ti}'] += loss / b
 
             losses['total_loss'] += losses['ce_loss_%d'%ti]
-            losses[f'dice_loss_{ti}'] = dice_loss(data[f'masks_{ti}'], data['cls_gt'][:,ti,0])
+            losses[f'dice_loss_{ti}'] = dice_loss(data[f'masks_{ti}'], data['cls_gt'][:,ti,0]) # dice loss评估相似性 X交Y/X+Y
             losses['total_loss'] += losses[f'dice_loss_{ti}']
 
         return losses
