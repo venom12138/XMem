@@ -45,6 +45,33 @@ class FeatureFusionBlock(nn.Module):
         # fuse之后 [b, max_obj_num, g_out_dim, H//16, W//16]
         return g
 
+class FlowValueFuser(nn.Module):
+    def __init__(self, x_in_dim, f_in_dim, out_dim):
+        super().__init__()
+
+        self.block1 = GroupResBlock(x_in_dim+f_in_dim, out_dim)
+        self.attention = CBAM(out_dim)
+        self.block2 = GroupResBlock(out_dim, out_dim)
+    
+    # memory_value: [b, max_obj_num, x_in_dim/value_dim, H//16, W//16]
+    # flow_feat_16: [b, f_in_dim, H//16, W//16]
+    # return: [b, max_obj_num, out_dim/value_dim, H//16, W//16]
+    def forward(self, memory_value, flow_feat_16):
+        batch_size, num_objects = memory_value.shape[:2]
+        # 将x和g cat起来
+        flow_feat_16 = flow_feat_16.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
+        fuse_feat = torch.cat([memory_value, flow_feat_16], dim=2) # B x max_obj_num x x_in_dim+f_in_dim x H//16 x W//16
+
+        # distributor后 g:[b, max_obj_num, x_in_dim+f_in_dim, H//16, W//16]
+        memory_value = self.block1(fuse_feat)
+        # 经过block1之后，g:[b, max_obj_num, out_dim, H//16, W//16]
+        r = self.attention(memory_value.flatten(start_dim=0, end_dim=1))
+        r = r.view(batch_size, num_objects, *r.shape[1:])
+
+        memory_value = self.block2(memory_value+r)
+        
+        # fuse之后 [b, max_obj_num, out_dim, H//16, W//16]
+        return memory_value
 
 class HiddenUpdater(nn.Module):
     # Used in the decoder, multi-scale feature + GRU
@@ -163,7 +190,6 @@ class ValueEncoder(nn.Module):
             h = self.hidden_reinforce(g, h)
 
         return g, h
- 
 
 class KeyEncoder(nn.Module):
     def __init__(self):
@@ -189,6 +215,36 @@ class KeyEncoder(nn.Module):
 
         return f16, f8, f4
 
+class FlowEncoder(nn.Module):
+    def __init__(self, ):
+        super(FlowEncoder, self).__init__()
+        network = resnet.resnet18(pretrained=True)
+        # flow的channels=2，其余的block使用预训练权重 
+        self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False) 
+        self.bn1 = network.bn1
+        self.relu = network.relu  # 1/2, 64
+        self.maxpool = network.maxpool
+
+        self.layer1 = network.layer1 # 1/4, 64
+        self.layer2 = network.layer2 # 1/8, 128
+        self.layer3 = network.layer3 # 1/16, 256
+    
+    # flow:B x num_frames x 2 x H x W
+    def forward(self, flow):
+        batch_size, num_frames = flow.shape[:2]
+        # flatten之后, flow: [b*num_frames, 2, H//16, W//16]
+        flow = flow.flatten(start_dim=0, end_dim=1) # 
+        flow = self.conv1(flow)
+        flow = self.bn1(flow)
+        flow = self.relu(flow) 
+        flow = self.maxpool(flow)  # 1/4, 64
+
+        flow_4 = self.layer1(flow) # 1/4, 64
+        flow_8 = self.layer2(flow_4) # 1/8, 128
+        flow_16 = self.layer3(flow_8) # 1/16, 256
+        flow_16 = flow_16.view(batch_size, num_frames, *flow_16.shape[1:])
+        
+        return flow_16
 
 class UpsampleBlock(nn.Module):
     def __init__(self, skip_dim, g_up_dim, g_out_dim, scale_factor=2):

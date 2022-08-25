@@ -13,7 +13,7 @@ import torch.optim as optim
 import git
 import datetime
 # TODO change to relative path
-sys.path.append('/home/venom/projects/XMem/')
+sys.path.append('/cluster/home2/yjw/venom/XMem/')
 print(sys.path)
 # from model.network import XMem
 # from model.losses import LossComputer
@@ -64,6 +64,7 @@ class XMemTrainer:
             self.log_text_interval = self.log_image_interval = 1
 
     def do_pass(self, data, it=0):
+        
         # No need to store the gradient outside training
         torch.set_grad_enabled(self._is_train)
 
@@ -74,6 +75,8 @@ class XMemTrainer:
         out = {}
         # [b, num_frames, 3, H, W]
         frames = data['rgb']
+        # [b, num_frames, 2, H, W]
+        flows = data['flow']
         # [b, 1, max_num_obj, H, W]
         first_frame_gt = data['first_frame_gt'].float()
         b = frames.shape[0]
@@ -96,6 +99,8 @@ class XMemTrainer:
             # 正常的attention是query和key做内积，找出interest的区域，这里因为是frame - frame的对应，
             # 所以qk和mk的内积充当了key的角色，qe selection充当了query的角色
             key, shrinkage, selection, f16, f8, f4 = self.XMem('encode_key', frames)
+            
+            flow_feats = self.XMem('encode_flow', flows) # B x num_frames x Cf x H/P x W/P; Cf =256
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
@@ -137,9 +142,11 @@ class XMemTrainer:
                         shrinkage[bi, :, indices[bi]] for bi in range(b)
                     ], 0) if shrinkage is not None else None
 
-                # Segment frame ti
+                # Segment frame ti, selection就是query_selection
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
+                
+                memory_readout = self.XMem('fuse_flow_value', memory_readout, flow_feats[:,ti]) # shape不变
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))
                 args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
@@ -187,7 +194,7 @@ class XMemTrainer:
                 if it % self.save_checkpoint_interval == 0 and it != 0:
                     if self.logger is not None:
                         self.save_checkpoint(it)
-
+        
         # Backward pass
         self.optimizer.zero_grad(set_to_none=True)
         if self.config['amp']:
@@ -197,8 +204,8 @@ class XMemTrainer:
         else:
             losses['total_loss'].backward() 
             self.optimizer.step()
-
         self.scheduler.step()
+        
 
     def save_network(self, it):
         if self.save_path is None:
@@ -292,6 +299,7 @@ if __name__ == '__main__':
     logger.log_string('hyperpara', str(config))
     data = {
             'rgb': torch.rand(2,3,3,384,384), # [b, num_frames, 3, H, W]
+            'flow':torch.rand(2,3,2,384,384), # [b, num_frames, 2, H, W]
             'first_frame_gt': torch.randint(0, 1, (2,1,5,384,384)), # [b, 1, max_num_obj, H, W] one hot
             'cls_gt': torch.randint(0,2,(2,3,1,384,384)), # [b, num_frames, 1, H, W]
             'selector': torch.tensor([[1, 1, 1, 0, 0],[1, 1, 1, 0, 0]]), # [b,max_num_obj] 前num_objects个是1，后面是0
@@ -299,7 +307,7 @@ if __name__ == '__main__':
         }
     model = XMemTrainer(config).train()
     network = resnet.resnet50(pretrained=False)
-    print(model.XMem)
-    print(f'----------')
-    print(network)
+    # print(model.XMem)
+    # print(f'----------')
+    # print(network)
     model.do_pass(data, 1)

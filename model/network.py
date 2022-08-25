@@ -30,7 +30,8 @@ class XMem(nn.Module):
 
         self.key_encoder = KeyEncoder() # R50 前三个stage: 
         self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)
-
+        self.flow_encoder = FlowEncoder()
+        self.flow_value_fuser = FlowValueFuser(self.value_dim, 256, self.value_dim)
         # Projection from f16 feature space to key/value space
         # indim:1024,即f16；outdim:key_dim
         self.key_proj = KeyProjection(1024, self.key_dim)
@@ -98,7 +99,18 @@ class XMem(nn.Module):
         g16, h16 = self.value_encoder(frame, image_feat_f16, h16, masks, others, is_deep_update)
 
         return g16, h16
-
+    
+    # flow: B x num_frames x 2 x H x W
+    # return: B x Cf x H/P x W/P; Cf=256
+    def encode_flow(self, flow):
+        return self.flow_encoder(flow)
+    
+    # memory_value: [B, max_obj_num, x_in_dim/value_dim, H//16, W//16]
+    # flow: [b, f_in_dim, H//16, W//16]
+    # return: b x max_obj_num x x_in_dim/value_dim x H/P x W/P
+    def fuse_flow_value(self, mv, flow_feat):
+        return self.flow_value_fuser(mv, flow_feat)
+    
     # Used in training only. 
     # This step is replaced by MemoryManager in test time
     def read_memory(self, query_key, query_selection, memory_key, 
@@ -149,6 +161,10 @@ class XMem(nn.Module):
             return self.read_memory(*args, **kwargs)
         elif mode == 'segment':
             return self.segment(*args, **kwargs)
+        elif mode == 'encode_flow':
+            return self.encode_flow(*args, **kwargs)
+        elif mode == 'fuse_flow_value':
+            return self.fuse_flow_value(*args, **kwargs)
         else:
             raise NotImplementedError
 
