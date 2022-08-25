@@ -92,13 +92,16 @@ class XMemTrainer:
             # f16:[B, num_frames, 1024, H//16, W//16]
             # f8:[B, num_frames, 512, H//8, W//8]
             # f4:[B, num_frames, 256, H//4, W//4]
+
+            # 正常的attention是query和key做内积，找出interest的区域，这里因为是frame - frame的对应，
+            # 所以qk和mk的内积充当了key的角色，qe selection充当了query的角色
             key, shrinkage, selection, f16, f8, f4 = self.XMem('encode_key', frames)
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
             # first_frame_gt[:,0]:[b, max_num_obj, H, W]
             # hidden: [b, max_num_obj, hidden_dim, H, W]
-            # f16[:,0]: [b, 1, 1024, H//16, W//16]
+            # f16[:,0]: [b, 1024, H//16, W//16]
             # frames[:,0]: [b, 3, H, W]
             # encode_value只对采样的clip中的第一个frame和mask进行计算
             # v16:[b, max_obj_num, value_dim, H//16, W//16]
@@ -106,7 +109,7 @@ class XMemTrainer:
             v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, first_frame_gt[:,0])
             # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
-            
+            # 第0帧不用进行train，因为第0帧的mask已经给定了
             for ti in range(1, self.num_frames):
                 # 从memory 中 选取的ref_frame
                 if ti <= self.num_ref_frames:
@@ -118,6 +121,9 @@ class XMemTrainer:
                     # pick num_ref_frames random frames
                     # this is not very efficient but I think we would 
                     # need broadcasting in gather which we don't have
+                    # 生成一个array，代表了每个batch里选取的ref_frame的index，然后把它们选出来就行了
+                    # 确实不太高效，但是维度差的有点远，选起来比较麻烦，所以这样也还算合适
+                    # 第0帧有gt的是必选的，所以有filler_one，randperm是随机交换一下，然后取前num_ref_frames-1个
                     indices = [
                         torch.cat([filler_one, torch.randperm(ti-1)[:self.num_ref_frames-1]+1])
                     for _ in range(b)]

@@ -113,11 +113,13 @@ class XMem(nn.Module):
         # T就是num_ref_frames
         # num_objects就是max_obj_num
         batch_size, num_objects = memory_value.shape[:2]
-        memory_value = memory_value.flatten(start_dim=1, end_dim=2)
+        memory_value = memory_value.flatten(start_dim=1, end_dim=2) # B x num_objects x CV x T x H x W -> B x num_objects*CV x T x H x W
         # query selection是key_proj之后的结果，是一个[B, CK, H, W]的tensor
         # affinity 是 [B, THW//P, HW//p]的tensor(384/16*384/16=576)
         affinity = get_affinity(memory_key, memory_shrinkage, query_key, query_selection)
+        # mv: B x num_objects*CV x T x H x W -> B x num_objects*CV x H x W
         memory = readout(affinity, memory_value)
+        # memory: B x num_objects x CV x H x W
         memory = memory.view(batch_size, num_objects, self.value_dim, *memory.shape[-2:])
 
         return memory
