@@ -13,7 +13,7 @@ import torch.optim as optim
 import git
 import datetime
 # TODO change to relative path
-sys.path.append('/cluster/home2/yjw/venom/XMem/')
+sys.path.append('/home/venom/projects/XMem/')
 print(sys.path)
 # from model.network import XMem
 # from model.losses import LossComputer
