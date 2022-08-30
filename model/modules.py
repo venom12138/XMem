@@ -14,12 +14,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# from model.group_modules import *
-# from model import resnet
-# from model.cbam import CBAM
-from group_modules import *
-import resnet
-from cbam import CBAM
+from model.group_modules import *
+from model import resnet
+from model.cbam import CBAM
+# from group_modules import *
+# import resnet
+# from cbam import CBAM
 from torchsummary import summary
 
 class FeatureFusionBlock(nn.Module):

@@ -52,9 +52,9 @@ class BootstrappedKL(nn.Module):
     
     def forward(self, input, target, it):
         if it < self.start_warm:
-            return F.kl_div(input.softmax(dim=-1).log(), target.softmax(dim=-1).log()), 1.0
+            return F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1)), 1.0
 
-        raw_loss = F.kl_div(input.softmax(dim=-1).log(), target.softmax(dim=-1).log(), reduction='none').view(-1)
+        raw_loss = F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='none').view(-1)
         num_pixels = raw_loss.numel()
 
         if it > self.end_warm:
@@ -69,21 +69,31 @@ class LossComputer:
         super().__init__()
         self.config = config
         self.bce = BootstrappedCE(config['start_warm'], config['end_warm'])
+        self.bkl = BootstrappedKL(config['start_warm'], config['end_warm'])
 
     def compute(self, data, num_objects, it):
         losses = defaultdict(int)
 
         b, t = data['rgb'].shape[:2]
-
+        print(t)
         losses['total_loss'] = 0
-        for ti in range(1, t):
+        for ti in range(0, t):
             for bi in range(b):
-                loss, p = self.bce(data[f'logits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,ti,0], it)
+                if ti == t-1:
+                    loss, p = self.bce(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,1,0], it)
+                elif ti == 0:
+                    loss, p = self.bce(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,0,0], it)
+                else:
+                    loss, p = self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
                 losses['p'] += p / b / (t-1)
                 losses[f'ce_loss_{ti}'] += loss / b
 
             losses['total_loss'] += losses['ce_loss_%d'%ti]
-            losses[f'dice_loss_{ti}'] = dice_loss(data[f'masks_{ti}'], data['cls_gt'][:,ti,0]) # dice loss评估相似性 X交Y/X+Y
-            losses['total_loss'] += losses[f'dice_loss_{ti}']
+            if ti == 0:
+                losses[f'dice_loss_{ti}'] = dice_loss(data[f'bmasks_{ti}'], data['cls_gt'][:,0,0]) # dice loss评估相似性 X交Y/X+Y
+                losses['total_loss'] += losses[f'dice_loss_{ti}']
+            elif ti == t - 1:
+                losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data['cls_gt'][:,1,0]) # dice loss评估相似性 X交Y/X+Y
+                losses['total_loss'] += losses[f'dice_loss_{ti}']
 
         return losses

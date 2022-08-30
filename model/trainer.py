@@ -13,18 +13,18 @@ import torch.optim as optim
 import git
 import datetime
 # TODO change to relative path
-sys.path.append('/cluster/home2/yjw/venom/XMem/')
-print(sys.path)
-# from model.network import XMem
-# from model.losses import LossComputer
-from network import XMem
-from losses import LossComputer
+sys.path.append('/home/venom/projects/XMem/')
+sys.path.append('.')
+from model.network import XMem
+from model.losses import LossComputer
+# from network import XMem
+# from losses import LossComputer
 from util.log_integrator import Integrator
 from util.image_saver import pool_pairs
 from util.configuration import Configuration
 from util.logger import TensorboardLogger
-import resnet
-
+import model.resnet as resnet
+# import resnet
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
         self.config = config
@@ -200,7 +200,7 @@ class XMemTrainer:
             # v16:[b, max_obj_num, value_dim, H//16, W//16]
             # hidden:[b, max_obj_num, hidden_dim, H//16, W//16]
             # frames是用最后一个
-            v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, first_frame_gt[:,0])
+            v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, last_frame_gt[:,0])
             # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
             # backward video
@@ -253,10 +253,14 @@ class XMemTrainer:
                     v16, hidden = self.XMem('encode_value', frames[:,ti], f16[:,ti], hidden, masks, is_deep_update=is_deep_update)
                     values = torch.cat([values, v16.unsqueeze(3)], 3) # 更新后的value用于下一帧，也就是每一帧的alue都是用的上一帧的
 
-                out[f'bmasks_{ti}'] = masks
-                out[f'blogits_{ti}'] = logits
-            out[f'fmasks_0'] = first_frame_gt
-            out[f'bmasks_{self.num_frames-1}'] = last_frame_gt
+                out[f'bmasks_{self.num_frames-ti-1}'] = masks # [b, max_obj_num, H, W]
+                out[f'blogits_{self.num_frames-ti-1}'] = logits # [b, max_obj_num+1, H, W]还有background
+            # out[f'fmasks_0'] = first_frame_gt
+            # out[f'bmasks_{self.num_frames-1}'] = last_frame_gt
+            # blogits:0，1，2，...，num_frames-2
+            # flogits:1,2,3,...,num_frames-1
+            # blogits0和cls_gt0作cross_entropy
+            # flogits_num_frames-1和cls_gt_num_frames-1作cross_entropy
             if self._do_log or self._is_train:
                 losses = self.loss_computer.compute({**data, **out}, num_filled_objects, it)
 
@@ -380,6 +384,7 @@ if __name__ == '__main__':
     raw_config.parse()
     stage_config = raw_config.get_stage_parameters('0')
     config = dict(**raw_config.args, **stage_config)
+    config['num_frames'] = 4
     # repo = git.Repo("..")
     # git_info = str(repo.active_branch)+' '+str(repo.head.commit.hexsha)
     if config['exp_id'].lower() != 'null':
@@ -393,7 +398,7 @@ if __name__ == '__main__':
             'rgb': torch.rand(2,4,3,384,384), # [b, num_frames, 3, H, W]
             'flow':torch.rand(2,4,2,384,384), # [b, num_frames, 2, H, W]
             'first_last_frame_gt': torch.randint(0, 1, (2,2,5,384,384)), # [b, 2, max_num_obj, H, W] one hot
-            'cls_gt': torch.randint(0,2,(2,4,1,384,384)), # [b, num_frames, 1, H, W]
+            'cls_gt': torch.randint(0,2,(2,2,1,384,384)), # [b, 2, 1, H, W]
             'selector': torch.tensor([[1, 1, 1, 0, 0],[1, 1, 1, 0, 0]]), # [b,max_num_obj] 前num_objects个是1，后面是0
             'info': {'num_frames': torch.tensor([4,4]), 'num_objects': torch.tensor([3,3])},
         }

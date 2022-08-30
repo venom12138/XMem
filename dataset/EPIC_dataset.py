@@ -37,11 +37,11 @@ class EPICDataset(Dataset):
         ])
         # 仿射变换：平移旋转之类的
         self.pair_im_dual_transform = transforms.Compose([
-            transforms.RandomAffine(degrees=0 if finetune or self.is_bl else 15, shear=0 if finetune or self.is_bl else 10, interpolation=InterpolationMode.BILINEAR, fill=im_mean),
+            transforms.RandomAffine(degrees=0 if finetune else 15, shear=0 if finetune else 10, interpolation=InterpolationMode.BILINEAR, fill=im_mean),
         ])
 
         self.pair_gt_dual_transform = transforms.Compose([
-            transforms.RandomAffine(degrees=0 if finetune or self.is_bl else 15, shear=0 if finetune or self.is_bl else 10, interpolation=InterpolationMode.NEAREST, fill=0),
+            transforms.RandomAffine(degrees=0 if finetune else 15, shear=0 if finetune else 10, interpolation=InterpolationMode.NEAREST, fill=0),
         ])
 
         # These transform are the same for all pairs in the sampled sequence
@@ -92,7 +92,7 @@ class EPICDataset(Dataset):
             # 随机选取一帧，然后选取这一帧图片前后各自max jump以内的图片
             # 这样保证了得到的采样帧两帧之间不会相差超过max_jump
             # 每选取一帧，就把该帧前后的max_jump帧都append进去
-            frames_idx = [frames[0], frames[-1], np.random.randint(length)] # first, last, random
+            frames_idx = [0, len(frames)-1, np.random.randint(length)] # first, last, random
             acceptable_set = set(range(max(0, frames_idx[-1]-this_max_jump), min(length, frames_idx[-1]+this_max_jump+1))).difference(set(frames_idx))
             while(len(frames_idx) < num_frames):
                 idx = np.random.choice(list(acceptable_set))
@@ -155,12 +155,12 @@ class EPICDataset(Dataset):
                     masks.append(this_gt)
 
                 this_im = self.final_im_transform(this_im)
-                this_flow = np.stack([this_flowu, this_flowv], axis=0)
+                this_flow = torch.stack([torch.from_numpy(np.array(this_flowu)), torch.from_numpy(np.array(this_flowv))], dim=0)
                 images.append(this_im)
                 flows.append(this_flow)
 
             images = torch.stack(images, 0)
-            flows = torch.stack(flows, 0)
+            flows = torch.stack(flows, 0).float()
 
             labels = np.unique(masks[0])
             # Remove background

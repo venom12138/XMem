@@ -10,8 +10,8 @@ from torch.utils.data import DataLoader, ConcatDataset
 import torch.distributed as distributed
 
 from model.trainer import XMemTrainer
-from dataset.static_dataset import StaticTransformDataset
-from dataset.vos_dataset import VOSDataset
+# from dataset.static_dataset import StaticTransformDataset
+# from dataset.vos_dataset import VOSDataset
 from dataset.EPIC_dataset import EPICDataset
 
 from util.logger import TensorboardLogger
@@ -68,9 +68,9 @@ def get_EPIC_parser():
     parser.add_argument('--debug', help='Debug mode which logs information more often', action='store_true')
 
     # # Multiprocessing parameters, not set by users
-    # parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
-
-    return vars(parser.parse_args())
+    parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
+    args = parser.parse_args()
+    return {**vars(args), **{'amp': not args.no_amp}}
 
 """
 Initial setup
@@ -122,7 +122,9 @@ if local_rank == 0:
         long_id = '%s_%s' % (datetime.datetime.now().strftime('%b%d_%H.%M.%S'), config['exp_id'])
     else:
         long_id = None
-    logger = TensorboardLogger(config['exp_id'], long_id)
+    repo = git.Repo(".")
+    git_info = str(repo.active_branch)+' '+str(repo.head.commit.hexsha)
+    logger = TensorboardLogger(config['exp_id'], long_id, git_info)
     logger.log_string('hyperpara', str(config))
 
     # Construct the rank 0 model
