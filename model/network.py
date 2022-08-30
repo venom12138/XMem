@@ -8,7 +8,7 @@ It further depends on modules.py which gives more detailed implementations of su
 
 import torch
 import torch.nn as nn
-
+from copy import deepcopy
 # from model.aggregate import aggregate
 # from model.modules import *
 # from model.memory_util import *
@@ -220,7 +220,10 @@ class XMem(nn.Module):
 
     def load_weights(self, src_dict, init_as_zero_if_needed=False):
         # Maps SO weight (without other_mask) to MO weight (with other_mask)
+        load_strict = False
         for k in list(src_dict.keys()):
+            if ('flow_encoder' in k) or ('flow_value_fuser' in k):
+                load_strict = True
             if k == 'value_encoder.conv1.weight':
                 if src_dict[k].shape[1] == 4:
                     print('Converting weights from single object to multiple objects.')
@@ -231,5 +234,10 @@ class XMem(nn.Module):
                     else:
                         print('Zero-initialized padding.')
                     src_dict[k] = torch.cat([src_dict[k], pads], 1)
-
-        self.load_state_dict(src_dict)
+        sd_before_load = deepcopy(self.state_dict())
+        self.load_state_dict(src_dict, strict=load_strict)
+        sd_after_load = deepcopy(self.state_dict())
+        same_keys = [k for k in sd_before_load if torch.equal(sd_before_load[k], sd_after_load[k])]
+        if load_strict == False:
+            assert len(same_keys) == len(self.flow_encoder.state_dict().keys()) + \
+                                    len(self.flow_value_fuser.state_dict().keys())

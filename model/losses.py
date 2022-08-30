@@ -42,6 +42,27 @@ class BootstrappedCE(nn.Module):
         loss, _ = torch.topk(raw_loss, int(num_pixels * this_p), sorted=False)
         return loss.mean(), this_p
 
+class BootstrappedKL(nn.Module):
+    def __init__(self, start_warm, end_warm, top_p=0.15):
+        super().__init__()
+
+        self.start_warm = start_warm
+        self.end_warm = end_warm
+        self.top_p = top_p
+    
+    def forward(self, input, target, it):
+        if it < self.start_warm:
+            return F.kl_div(input.softmax(dim=-1).log(), target.softmax(dim=-1).log()), 1.0
+
+        raw_loss = F.kl_div(input.softmax(dim=-1).log(), target.softmax(dim=-1).log(), reduction='none').view(-1)
+        num_pixels = raw_loss.numel()
+
+        if it > self.end_warm:
+            this_p = self.top_p
+        else:
+            this_p = self.top_p + (1-self.top_p)*((self.end_warm-it)/(self.end_warm-self.start_warm))
+        loss, _ = torch.topk(raw_loss, int(num_pixels * this_p), sorted=False)
+        return loss.mean(), this_p
 
 class LossComputer:
     def __init__(self, config):
