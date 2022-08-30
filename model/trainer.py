@@ -71,7 +71,7 @@ class XMemTrainer:
         for k, v in data.items():
             if type(v) != list and type(v) != dict and type(v) != int:
                 data[k] = v.cuda(non_blocking=True)
-
+    
         out = {}
         # [b, num_frames, 3, H, W]
         frames = data['rgb']
