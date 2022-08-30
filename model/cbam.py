@@ -34,6 +34,7 @@ class ChannelGate(nn.Module):
         # types: ['avg', 'max']
         for pool_type in self.pool_types:
             if pool_type=='avg':
+                # avg_pool：b*max_obj_num x 512 x 1 x 1
                 avg_pool = F.avg_pool2d( x, (x.size(2), x.size(3)), stride=(x.size(2), x.size(3)))
                 channel_att_raw = self.mlp( avg_pool )
             elif pool_type=='max':
