@@ -14,16 +14,16 @@ import git
 import datetime
 # TODO change to relative path
 sys.path.append('/home/venom/projects/XMem/')
-sys.path.append('.')
-from model.network import XMem
-from model.losses import LossComputer
+# from model.losses import LossComputer
 # from network import XMem
-# from losses import LossComputer
+
 from util.log_integrator import Integrator
 from util.image_saver import pool_pairs
 from util.configuration import Configuration
 from util.logger import TensorboardLogger
 import model.resnet as resnet
+from model.network import XMem
+from model.losses import LossComputer
 # import resnet
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):

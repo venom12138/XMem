@@ -24,16 +24,18 @@ class BootstrappedCE(nn.Module):
     def __init__(self, start_warm, end_warm, top_p=0.15):
         super().__init__()
 
-        self.start_warm = start_warm
+        self.start_warm = 0 # start_warm
         self.end_warm = end_warm
         self.top_p = top_p
 
     def forward(self, input, target, it):
         if it < self.start_warm:
+            # 这个结果就是/384/384之后的
+            # 相当于是每一个pixel的概率之间算了cross entropy，最后除以pixel的数量
             return F.cross_entropy(input, target), 1.0
 
-        raw_loss = F.cross_entropy(input, target, reduction='none').view(-1)
-        num_pixels = raw_loss.numel()
+        raw_loss = F.cross_entropy(input, target, reduction='none').view(-1) # raw_loss [H*W]
+        num_pixels = raw_loss.numel() # num_pixels = H*W
 
         if it > self.end_warm:
             this_p = self.top_p
@@ -52,10 +54,12 @@ class BootstrappedKL(nn.Module):
     
     def forward(self, input, target, it):
         if it < self.start_warm:
-            return F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='sum')/input.shape[0], 1.0
-
-        raw_loss = F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction=None).view(-1) # /input.shape[0]
-        num_pixels = raw_loss.numel()
+            # pixel wise的平均值
+            return F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='sum')/input.shape[-1]/input.shape[-2], 1.0
+        # raw_loss: [(num_objects+1)*H*W]
+        # raw_loss应该是每一个pixel一个的
+        raw_loss = F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='none').sum(dim=1).view(-1) # /input.shape[0]
+        num_pixels = raw_loss.numel() 
 
         if it > self.end_warm:
             this_p = self.top_p

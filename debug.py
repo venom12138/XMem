@@ -30,7 +30,7 @@ import torch
 
 p = [[[0.5,0.2],[0.4,0.3]], [[0.5,0.8],[0.6,0.7]]]
 log_q = [[[0.2,0.4], [0.3,0.5]], [[0.6,0.3],[0.4,0.1]]]
-
+kl_result = torch.zeros_like(torch.tensor(p))
 kl = 0
 for dim0 in range(2):
     for dim1 in range(2):
@@ -38,5 +38,7 @@ for dim0 in range(2):
             temp_p = p[dim0][dim1][dim2]
             temp_logq = log_q[dim0][dim1][dim2]
             kl += temp_p * (np.log(temp_p) - temp_logq)
+            kl_result[dim0, dim1, dim2] = temp_p * (np.log(temp_p) - temp_logq)
 print(kl)
-print(F.kl_div(torch.tensor(log_q), torch.tensor(p), reduction='sum'))
+print(kl_result)
+print(F.kl_div(torch.tensor(log_q), torch.tensor(p), reduction='none'))
