@@ -238,6 +238,17 @@ class XMem(nn.Module):
         self.load_state_dict(src_dict, strict=load_strict)
         sd_after_load = deepcopy(self.state_dict())
         same_keys = [k for k in sd_before_load if torch.equal(sd_before_load[k], sd_after_load[k])]
+        new_keys = []
+        for key in same_keys:
+            # print(key)
+            # print('bn' in key)
+            if key.startswith('key_encoder') or key.startswith('value_encoder'):
+                if 'running_mean' in key or 'running_var' in key or 'num_batches_tracked' in key: 
+                    continue
+            new_keys.append(key)
+        print('-------------------- Loaded weights --------------------')
+        print(f'Weights unloaded:{new_keys}')
+        print('----------------------------')
         if load_strict == False:
-            assert len(same_keys) == len(self.flow_encoder.state_dict().keys()) + \
+            assert len(new_keys) == len(self.flow_encoder.state_dict().keys()) + \
                                     len(self.flow_value_fuser.state_dict().keys())

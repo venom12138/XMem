@@ -46,15 +46,15 @@ class BootstrappedKL(nn.Module):
     def __init__(self, start_warm, end_warm, top_p=0.15):
         super().__init__()
 
-        self.start_warm = start_warm
+        self.start_warm = 0 # start_warm
         self.end_warm = end_warm
         self.top_p = top_p
     
     def forward(self, input, target, it):
         if it < self.start_warm:
-            return F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1)), 1.0
+            return F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='sum')/input.shape[0], 1.0
 
-        raw_loss = F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='none').view(-1)
+        raw_loss = F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction=None).view(-1) # /input.shape[0]
         num_pixels = raw_loss.numel()
 
         if it > self.end_warm:
@@ -75,7 +75,7 @@ class LossComputer:
         losses = defaultdict(int)
 
         b, t = data['rgb'].shape[:2]
-        print(t)
+        # print(t)
         losses['total_loss'] = 0
         for ti in range(0, t):
             for bi in range(b):
