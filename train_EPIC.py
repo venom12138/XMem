@@ -189,7 +189,7 @@ max_skip_values = [20, 30, 10, 10]
 # 在训练的第10%，30%，80%的时候change max skip_values
 increase_skip_fraction = [0.1, 0.3, 0.8, 100]
 
-train_sampler, train_loader = renew_epic_loader(5)
+train_sampler, train_loader = renew_epic_loader(max_skip_values[0])
 renew_loader = renew_epic_loader
 
 

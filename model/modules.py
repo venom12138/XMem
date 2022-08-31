@@ -252,7 +252,7 @@ class UpsampleBlock(nn.Module):
         self.skip_conv = nn.Conv2d(skip_dim, g_up_dim, kernel_size=3, padding=1)
         self.distributor = MainToGroupDistributor(method='add')
         self.out_conv = GroupResBlock(g_up_dim, g_out_dim)
-        self.scale_factor = scale_factor
+        self.scale_factor = float(scale_factor)
 
     def forward(self, skip_f, up_g):
         skip_f = self.skip_conv(skip_f) #  B, 512, H//8, W//8 - > B, 512, H//8, W//8

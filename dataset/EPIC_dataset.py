@@ -92,12 +92,12 @@ class EPICDataset(Dataset):
             # 随机选取一帧，然后选取这一帧图片前后各自max jump以内的图片
             # 这样保证了得到的采样帧两帧之间不会相差超过max_jump
             # 每选取一帧，就把该帧前后的max_jump帧都append进去
-            frames_idx = [0, len(frames)-1, np.random.randint(length)] # first, last, random
-            acceptable_set = set(range(max(0, frames_idx[-1]-this_max_jump), min(length, frames_idx[-1]+this_max_jump+1))).difference(set(frames_idx))
+            frames_idx = [0, len(frames)-1, np.random.randint(1,length-1)] # first, last, random
+            acceptable_set = set(range(max(1, frames_idx[-1]-this_max_jump), min(length-1, frames_idx[-1]+this_max_jump+1))).difference(set(frames_idx))
             while(len(frames_idx) < num_frames):
                 idx = np.random.choice(list(acceptable_set))
                 frames_idx.append(idx)
-                new_set = set(range(max(0, frames_idx[-1]-this_max_jump), min(length, frames_idx[-1]+this_max_jump+1)))
+                new_set = set(range(max(1, frames_idx[-1]-this_max_jump), min(length-1, frames_idx[-1]+this_max_jump+1)))
                 acceptable_set = acceptable_set.union(new_set).difference(set(frames_idx))
 
             frames_idx = sorted(frames_idx)
@@ -194,7 +194,17 @@ class EPICDataset(Dataset):
             # this_mask一个[2, H, W]的np array, 其中每个像素值是true or false
             this_mask = (masks==l)
             # cls_gt是一个[2, H, W]的np array，将cls_gt和this_mask对应的位置赋上值
-            cls_gt[this_mask] = i+1
+            try:
+                cls_gt[this_mask] = i+1
+            except:
+                print(frames_idx)
+                print(cls_gt.shape)
+                print(this_mask.shape)
+                print(masks.shape)
+                print(l)
+                print(i)
+                print(self.vids[idx])
+                raise Exception('error')
             # first_frame_gt是一个one hot向量，[1, num_objects, H, W]
             # 将所有的num_frame里面的第一个，也就是第一个frame，里的第i个object赋给first_frame_gt，也就是一个0,1的array
             first_last_frame_gt[:,i] = this_mask

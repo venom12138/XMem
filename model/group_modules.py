@@ -19,7 +19,7 @@ def interpolate_groups(g, ratio, mode, align_corners):
     g = g.view(batch_size, num_objects, *g.shape[1:])
     return g
 
-def upsample_groups(g, ratio=2, mode='bilinear', align_corners=False):
+def upsample_groups(g, ratio=2., mode='bilinear', align_corners=False):
     return interpolate_groups(g, ratio, mode, align_corners)
 
 def downsample_groups(g, ratio=1/2, mode='area', align_corners=None):
