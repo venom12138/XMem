@@ -24,7 +24,7 @@ class BootstrappedCE(nn.Module):
     def __init__(self, start_warm, end_warm, top_p=0.15):
         super().__init__()
 
-        self.start_warm = 0 # start_warm
+        self.start_warm = start_warm
         self.end_warm = end_warm
         self.top_p = top_p
 
@@ -48,7 +48,7 @@ class BootstrappedKL(nn.Module):
     def __init__(self, start_warm, end_warm, top_p=0.15):
         super().__init__()
 
-        self.start_warm = 0 # start_warm
+        self.start_warm = start_warm
         self.end_warm = end_warm
         self.top_p = top_p
     
