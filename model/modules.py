@@ -231,9 +231,13 @@ class FlowEncoder(nn.Module):
     
     # flow:B x num_frames x 2 x H x W
     def forward(self, flow):
-        batch_size, num_frames = flow.shape[:2]
-        # flatten之后, flow: [b*num_frames, 2, H//16, W//16]
-        flow = flow.flatten(start_dim=0, end_dim=1) # 
+        if len(flow.shape) == 5:
+            batch_size, num_frames = flow.shape[:2]
+            # flatten之后, flow: [b*num_frames, 2, H//16, W//16]
+            flow = flow.flatten(start_dim=0, end_dim=1) # 
+            need_reshape = True
+        else:
+            need_reshape = False 
         flow = self.conv1(flow)
         flow = self.bn1(flow)
         flow = self.relu(flow) 
@@ -242,7 +246,8 @@ class FlowEncoder(nn.Module):
         flow_4 = self.layer1(flow) # 1/4, 64
         flow_8 = self.layer2(flow_4) # 1/8, 128
         flow_16 = self.layer3(flow_8) # 1/16, 256
-        flow_16 = flow_16.view(batch_size, num_frames, *flow_16.shape[1:])
+        if need_reshape:
+            flow_16 = flow_16.view(batch_size, num_frames, *flow_16.shape[1:])
         
         return flow_16
 
