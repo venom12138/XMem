@@ -1,6 +1,8 @@
 import torch
 import matplotlib.pyplot as plt
 import glob
+import sys
+sys.path.append('..')
 if torch.cuda.is_available():
   print('Using GPU')
   device = 'cuda'
@@ -44,11 +46,11 @@ config = {
 }
 
 ROOT_PATH = '../data'
-vid = 'P01_01_190'
+vid = 'P01_01_37'
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
-ckpt_path = '/cluster/home2/yjw/venom/XMem/saves/Aug31_11.59.01_test_0831_epic/Aug31_11.59.01_test_0831_epic_50000.pth'
+ckpt_path = '../saves/Aug31_11.59.01_test_0831_epic_50000.pth'
 network = XMem(config, ckpt_path).eval().to(device)
 
 mask_save_path = f'../visuals/{partition_id}/flow_mask/{video_id}/{vid}'
@@ -59,7 +61,7 @@ u_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/u'
 v_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/v'
 
 # use first mask
-mask_name = sorted(glob.glob(f'{ROOT_PATH}/{partition_id}/anno_masks/{video_id}/{vid}'))[0]
+mask_name = sorted(glob.glob(f'{ROOT_PATH}/{partition_id}/anno_masks/{video_id}/{vid}/*.jpg'))[0]
 
 if not os.path.isdir(mask_save_path):
     os.makedirs(mask_save_path)
@@ -107,7 +109,11 @@ with torch.cuda.amp.autocast(enabled=True):
 
         # convert numpy array to pytorch tensor format
         frame_torch, _ = image_to_torch(frame, device=device)
-        flow_torch, _ = image_to_torch(flow, device=device)
+
+        flow = flow.transpose(0, 1, 2)
+        # print(f'flow_shape:{flow.shape}')
+        flow_torch = torch.from_numpy(flow).float().to(device)/255
+        
         if current_frame_index == 0:
             # initialize with the mask
             mask_torch = index_numpy_to_one_hot_torch(mask, num_objects+1).to(device)
@@ -128,12 +134,16 @@ with torch.cuda.amp.autocast(enabled=True):
         visualization = overlay_davis(frame, prediction)
             # print(prediction.shape)
             # print(visualization.shape)
-        plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", visualization)
+        plt.imsave(f"{draw_save_path}/{frame_path.split('/')[-1]}", visualization)
 
         current_frame_index += 1
 import imageio.v2 as imageio
 images = []
-for frame_path in sorted(glob.glob(f'{draw_save_path}/{uid}/*.jpg')):
+for frame_path in sorted(glob.glob(f'{draw_save_path}/*.jpg')):
     im = imageio.imread(frame_path)
     images.append(im)
-imageio.mimsave(f"/cluster/home2/yjw/venom/EPIC-data/data/P01/forward_gif/{uid}.gif", images, 'GIF', duration=0.05)
+if not os.path.exists(f'../visuals/{partition_id}/flow_gif/{video_id}/'):
+    os.makedirs(f'../visuals/{partition_id}/flow_gif/{video_id}/')
+    
+imageio.mimsave(f'../visuals/{partition_id}/flow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
+# f'../visuals/{partition_id}/flow_draw/{video_id}/{vid}'
