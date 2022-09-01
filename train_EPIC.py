@@ -42,14 +42,14 @@ def get_EPIC_parser():
     Batch sizes are effective -- you don't have to scale them when you scale the number processes
     """
     parser.add_argument('--batch_size', default=8, type=int)
-    parser.add_argument('--iterations', default=150000, type=int)
+    parser.add_argument('--iterations', default=75000, type=int)
     parser.add_argument('--finetune', default=10000, type=int)
-    parser.add_argument('--steps', nargs="*", default=[120000], type=int)
+    parser.add_argument('--steps', nargs="*", default=[60000], type=int)
     parser.add_argument('--lr', help='Initial learning rate', default=1e-5, type=float)
     parser.add_argument('--num_ref_frames', default=3, type=int)
-    parser.add_argument('--num_frames', default=8, type=int)
-    parser.add_argument('--start_warm', default=20000, type=int)
-    parser.add_argument('--end_warm', default=70000, type=int)
+    parser.add_argument('--num_frames', default=5, type=int)
+    parser.add_argument('--start_warm', default=10000, type=int)
+    parser.add_argument('--end_warm', default=35000, type=int)
 
 
     parser.add_argument('--gamma', help='LR := LR*gamma at every decay step', default=0.1, type=float)
@@ -183,8 +183,8 @@ Not effective for stage 0 training
 The initial value is not listed here but in renew_vos_loader(X)
 """
 # 每隔多少帧进行一次采样，curriculum learning
-# DAVIS帧率是24，EPIC是60，所以用两倍间隔
-max_skip_values = [20, 30, 10, 10]
+# DAVIS帧率是24，EPIC是60，算了用6倍间隔
+max_skip_values = [60, 90, 40, 40]
 
 # 在训练的第10%，30%，80%的时候change max skip_values
 increase_skip_fraction = [0.1, 0.3, 0.8, 100]
