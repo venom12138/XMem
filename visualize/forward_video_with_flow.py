@@ -43,19 +43,28 @@ config = {
     'max_long_term_elements': 10000,
 }
 
-network = XMem(config, './saves/XMem.pth').eval().to(device)
+ROOT_PATH = '../data'
+vid = 'P01_01_190'
+partition_id = vid.split('_')[0]
+video_id = partition_id + '_' + vid.split('_')[1]
 
-mask_save_path = './data/P01/forward_masks/P01_01'
-draw_save_path = './data/P01/forward_draws/P01_01'
-video_path = '/cluster/home2/yjw/venom/XMem/data/P01/positive_frames/P01_01/37'
+ckpt_path = '/cluster/home2/yjw/venom/XMem/saves/Aug31_11.59.01_test_0831_epic/Aug31_11.59.01_test_0831_epic_50000.pth'
+network = XMem(config, ckpt_path).eval().to(device)
+
+mask_save_path = f'../visuals/{partition_id}/flow_mask/{video_id}/{vid}'
+draw_save_path = f'../visuals/{partition_id}/flow_draw/{video_id}/{vid}'
+
+video_path = f'{ROOT_PATH}/{partition_id}/rgb_frames/{video_id}/{vid}'
+u_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/u'
+v_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/v'
+
 # use first mask
-mask_name = '/cluster/home2/yjw/venom/EPIC-data/data/P01/first_last_masks/P01_01/37/frame_0000006341.jpg'
-uid = video_path.split('/')[-1]
+mask_name = sorted(glob.glob(f'{ROOT_PATH}/{partition_id}/anno_masks/{video_id}/{vid}'))[0]
 
-if not os.path.isdir(f"{mask_save_path}/{uid}"):
-    os.makedirs(f"{mask_save_path}/{uid}")
-if not os.path.isdir(f"{draw_save_path}/{uid}"):
-    os.makedirs(f"{draw_save_path}/{uid}")
+if not os.path.isdir(mask_save_path):
+    os.makedirs(mask_save_path)
+if not os.path.isdir(draw_save_path):
+    os.makedirs(draw_save_path)
 
 mask = np.array(Image.open(mask_name).convert('1'),dtype=np.int32)
 print(np.unique(mask))
@@ -78,6 +87,17 @@ current_frame_index = 0
 
 with torch.cuda.amp.autocast(enabled=True):
     for frame_path in sorted(glob.glob(f'{video_path}/*.jpg')):
+        jpg_name = frame_path.split('/')[-1]
+        if len(vid.split('_')[1]) == 2:
+            flow_id = int(jpg_name.split('.')[0].split('_')[1])
+            flow_name = 'frame_' + str(int(np.ceil((float(flow_id) - 3) / 2))).zfill(10)+ '.jpg'
+            u_flow_name = f'{u_flow_path}/{flow_name}'
+            v_flow_name = f'{v_flow_path}/{flow_name}'
+            u_flow = np.array(Image.open(u_flow_name).convert('P'))
+            v_flow = np.array(Image.open(v_flow_name).convert('P'))
+            flow = np.stack([u_flow, v_flow], axis=0)
+        else:
+            raise NotImplementedError
         # load frame-by-frame
         frame = np.array(Image.open(frame_path))
         # plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", frame)
@@ -87,15 +107,16 @@ with torch.cuda.amp.autocast(enabled=True):
 
         # convert numpy array to pytorch tensor format
         frame_torch, _ = image_to_torch(frame, device=device)
+        flow_torch, _ = image_to_torch(flow, device=device)
         if current_frame_index == 0:
             # initialize with the mask
             mask_torch = index_numpy_to_one_hot_torch(mask, num_objects+1).to(device)
             
             # the background mask is not fed into the model
-            prediction = processor.step(frame_torch, mask_torch[1:])
+            prediction = processor.step(frame_torch, flow_torch, mask_torch[1:])
         else:
             # propagate only
-            prediction = processor.step(frame_torch)
+            prediction = processor.step(frame_torch, flow_torch)
 
         # argmax, convert to numpy
         # 0,1
