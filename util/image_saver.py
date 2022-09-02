@@ -121,10 +121,15 @@ def pool_pairs(images, size, num_objects):
             for oi in range(max_num_objects):
                 if ti == 0 or oi >= num_objects[bi]:
                     req_images['Mask_%d'%oi].append(mask_transform(images['first_last_frame_gt'][bi][0,oi], size))
+                    req_images[f'bMask_{oi}'].append(mask_transform(images['bmasks_%d'%ti][bi][oi], size))
                     # req_images['Mask_X8_%d'%oi].append(mask_transform(images['first_frame_gt'][bi][0,oi], size))
                     # req_images['Mask_X16_%d'%oi].append(mask_transform(images['first_frame_gt'][bi][0,oi], size))
+                elif ti == t - 1:
+                    req_images['Mask_%d'%oi].append(mask_transform(images['first_last_frame_gt'][bi][1,oi], size))
+                    req_images[f'fMask_{oi}'].append(mask_transform(images['fmasks_%d'%ti][bi][oi], size))
                 else:
-                    req_images['Mask_%d'%oi].append(mask_transform(images['fmasks_%d'%ti][bi][oi], size))
+                    req_images[f'fMask_{oi}'].append(mask_transform(images['fmasks_%d'%ti][bi][oi], size))
+                    req_images[f'bMask_{oi}'].append(mask_transform(images['bmasks_%d'%ti][bi][oi], size))
                     # req_images['Mask_%d'%oi].append(mask_transform(images['masks_%d'%ti][bi][oi][2], size))
                     # req_images['Mask_X8_%d'%oi].append(mask_transform(images['masks_%d'%ti][bi][oi][1], size))
                     # req_images['Mask_X16_%d'%oi].append(mask_transform(images['masks_%d'%ti][bi][oi][0], size))

@@ -61,7 +61,7 @@ def get_EPIC_parser():
 
     # Logging information
     parser.add_argument('--log_text_interval', default=100, type=int)
-    parser.add_argument('--log_image_interval', default=1000, type=int)
+    parser.add_argument('--log_image_interval', default=250, type=int)
     parser.add_argument('--save_network_interval', default=25000, type=int)
     parser.add_argument('--save_checkpoint_interval', default=50000, type=int)
     parser.add_argument('--exp_id', help='Experiment UNIQUE id, use NULL to disable logging to tensorboard', default='NULL')

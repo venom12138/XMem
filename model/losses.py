@@ -55,10 +55,11 @@ class BootstrappedKL(nn.Module):
     def forward(self, input, target, it):
         if it < self.start_warm:
             # pixel wise的平均值
-            return F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='sum')/input.shape[-1]/input.shape[-2], 1.0
+            # [TODO]:input 和 target detach掉一个， 
+            return F.kl_div(input.softmax(dim=1).log(), target.detach().softmax(dim=1), reduction='sum')/input.shape[-1]/input.shape[-2], 1.0
         # raw_loss: [(num_objects+1)*H*W]
         # raw_loss应该是每一个pixel一个的
-        raw_loss = F.kl_div(input.softmax(dim=1).log(), target.softmax(dim=1), reduction='none').sum(dim=1).view(-1) # /input.shape[0]
+        raw_loss = F.kl_div(input.softmax(dim=1).log(), target.detach().softmax(dim=1), reduction='none').sum(dim=1).view(-1) # /input.shape[0]
         num_pixels = raw_loss.numel() 
 
         if it > self.end_warm:
@@ -74,6 +75,8 @@ class LossComputer:
         self.config = config
         self.bce = BootstrappedCE(config['start_warm'], config['end_warm'])
         self.bkl = BootstrappedKL(config['start_warm'], config['end_warm'])
+        self.start_w = 1
+        self.end_w = 0.2
 
     def compute(self, data, num_objects, it):
         losses = defaultdict(int)
@@ -82,22 +85,30 @@ class LossComputer:
         # print(t)
         losses['total_loss'] = 0
         for ti in range(0, t):
+            weight = self.end_w + (self.start_w - self.end_w) * (ti / t)
             for bi in range(b):
                 if ti == t-1:
                     loss, p = self.bce(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,1,0], it)
                 elif ti == 0:
                     loss, p = self.bce(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,0,0], it)
                 else:
-                    loss, p = self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
+                    if it%2 == 0:
+                        loss, p = weight * self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
+                    else:
+                        loss, p = (1-weight+self.end_w) * self.bkl(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it)
                 losses['p'] += p / b / (t-1)
                 losses[f'ce_loss_{ti}'] += loss / b
 
             losses['total_loss'] += losses['ce_loss_%d'%ti]
+            # TODO: 中间帧做dice loss
             if ti == 0:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'bmasks_{ti}'], data['cls_gt'][:,0,0]) # dice loss评估相似性 X交Y/X+Y
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
             elif ti == t - 1:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data['cls_gt'][:,1,0]) # dice loss评估相似性 X交Y/X+Y
+                losses['total_loss'] += losses[f'dice_loss_{ti}']
+            else:
+                losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data[f'bmasks_{ti}'])
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
 
         return losses

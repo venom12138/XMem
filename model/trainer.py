@@ -49,6 +49,13 @@ class XMemTrainer:
         self.loss_computer = LossComputer(config)
 
         self.train()
+
+        # [TODO]: freeze key encoder 和 value encoder
+        for param in self.XMem.module.key_encoder.parameters():
+            param.requires_grad = False
+        for param in self.XMem.module.value_encoder.parameters():
+            param.requires_grad = False
+
         self.optimizer = optim.AdamW(filter(
             lambda p: p.requires_grad, self.XMem.parameters()), lr=config['lr'], weight_decay=config['weight_decay'])
         self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, config['steps'], config['gamma'])
@@ -82,7 +89,7 @@ class XMemTrainer:
         last_frame_gt = data['first_last_frame_gt'][:,1].unsqueeze(1).float()
         b = frames.shape[0]
         # data['info']['num_objects']: [], len=b, 每一个数代表每一个clip的object数量
-        # TODO:num_filled_objects需要被reverse
+        
         num_filled_objects = [o.item() for o in data['info']['num_objects']]
         # 此处的num_objects是max_num_obj，而不是每一个clip的object数量
         num_objects = first_frame_gt.shape[2]
