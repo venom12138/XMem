@@ -61,7 +61,7 @@ def get_image_array(images, grid_shape, captions={}):
         dy = 40
         for i, line in enumerate(caption.split('\n')):
             cv2.putText(output_image, line, (10, col_cnt*w+100+i*dy),
-                     font, 0.8, (255,255,255), 2, cv2.LINE_AA)
+                    font, 0.8, (255,255,255), 2, cv2.LINE_AA)
 
         # Put images
         for row_cnt, img in enumerate(v):

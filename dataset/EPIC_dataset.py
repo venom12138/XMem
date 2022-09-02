@@ -7,10 +7,12 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 from PIL import Image
 import numpy as np
-
+import sys
+sys.path.append('/cluster/home2/yjw/venom/XMem')
 from dataset.range_transform import im_normalization, im_mean
 from dataset.reseed import reseed
 import yaml
+import matplotlib.pyplot as plt
 
 class EPICDataset(Dataset):
     """
@@ -134,8 +136,9 @@ class EPICDataset(Dataset):
 
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
                     reseed(sequence_seed)
-                    this_gt = Image.open(path.join(vid_gt_path, jpg_name)).convert('P')
+                    this_gt = Image.open(path.join(vid_gt_path, jpg_name)).convert('1')
                     this_gt = self.all_gt_dual_transform(this_gt)
+                    
 
                 pairwise_seed = np.random.randint(2147483647)
                 reseed(pairwise_seed)
@@ -151,6 +154,7 @@ class EPICDataset(Dataset):
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
                     reseed(pairwise_seed)
                     this_gt = self.pair_gt_dual_transform(this_gt)
+                    
                     this_gt = np.array(this_gt)
                     masks.append(this_gt)
 
@@ -231,5 +235,9 @@ class EPICDataset(Dataset):
         return len(self.vids)
 
 if __name__ == '__main__':
-    dataset = EPICDataset(data_root='./data', yaml_root='./data/EPIC55_cut_subset_200.yaml', max_jump=20, num_frames=3, max_num_obj=3, finetune=False)
-    dataset[2]
+    dataset = EPICDataset(data_root='../data', yaml_root='../data/EPIC55_cut_subset_200.yaml', max_jump=20, num_frames=3, max_num_obj=3, finetune=False)
+    images = dataset[2]
+    print(f"name={images['info']['name']}")
+    
+    for obj in range(images['first_last_frame_gt'].shape[1]):
+        plt.imsave(f"../visuals/gt_{obj}.jpg", images['first_last_frame_gt'][0,obj],cmap='gray')

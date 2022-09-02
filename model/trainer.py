@@ -37,7 +37,8 @@ class XMemTrainer:
         try:
             self.XMem = nn.parallel.DistributedDataParallel(
                 XMem(config).cuda(), 
-                device_ids=[local_rank], output_device=local_rank, broadcast_buffers=False)
+                device_ids=[local_rank], output_device=local_rank, 
+                broadcast_buffers=False, find_unused_parameters=True)
         except:
             self.XMem = nn.parallel.DataParallel(
                 XMem(config).cuda())
@@ -283,13 +284,25 @@ class XMemTrainer:
                                 size = (384, 384)
                                 masks = pool_pairs(images, size, num_filled_objects)
                                 self.logger.log_cv2('train/pairs', masks, it)
-                                try:
-                                    for name, img_list in masks:
-                                        for i,img in enumerate(img_list):
-                                            plt.imsave(f"{self.logger.log_path}/{name}_{i}.jpg", img)
-                                except:
-                                    pass
-
+                                # try:
+                                b, t = images['rgb'].shape[:2]
+                                max_num_objects = max(num_filled_objects[:b])
+                                if not os.path.exists(f"{self.logger.log_path}/it={it}_mask"):
+                                    os.makedirs(f"{self.logger.log_path}/it={it}_mask")
+                                print(images['first_last_frame_gt'][0][0,0].detach().cpu())
+                                for bi in range(b):
+                                    for oi in range(max_num_objects):
+                                        plt.imsave(f"{self.logger.log_path}/it={it}_mask/gt_t=0_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][0,oi].detach().cpu(), cmap='gray')
+                                        plt.imsave(f"{self.logger.log_path}/it={it}_mask/gt_t={t-1}_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][1,oi].detach().cpu(), cmap='gray')
+                                for bi in range(b):
+                                    for ti in range(t):
+                                        for oi in range(max_num_objects):
+                                            if ti != 0:
+                                                plt.imsave(f"{self.logger.log_path}/it={it}_mask/f_t={ti}_b={bi}_oi={oi}.jpg", images['fmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
+                                            if ti != t-1:
+                                                plt.imsave(f"{self.logger.log_path}/it={it}_mask/b_t={ti}_b={bi}_oi={oi}.jpg", images['bmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
+                                # except:
+                                #     pass
 
             if self._is_train:
                 if (it) % self.log_text_interval == 0 and it != 0:
