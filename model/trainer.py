@@ -24,6 +24,8 @@ from util.logger import TensorboardLogger
 import model.resnet as resnet
 from model.network import XMem
 from model.losses import LossComputer
+import matplotlib.pyplot as plt
+
 # import resnet
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
@@ -279,7 +281,15 @@ class XMemTrainer:
                             if self.logger is not None:
                                 images = {**data, **out}
                                 size = (384, 384)
-                                self.logger.log_cv2('train/pairs', pool_pairs(images, size, num_filled_objects), it)
+                                masks = pool_pairs(images, size, num_filled_objects)
+                                self.logger.log_cv2('train/pairs', masks, it)
+                                try:
+                                    for name, img_list in masks:
+                                        for i,img in enumerate(img_list):
+                                            plt.imsave(f"{name}_{i}", img)
+                                except:
+                                    pass
+
 
             if self._is_train:
                 if (it) % self.log_text_interval == 0 and it != 0:

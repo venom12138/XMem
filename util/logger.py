@@ -40,6 +40,7 @@ class TensorboardLogger:
                 std=[1/0.5])
 
             log_path = os.path.join('.', 'saves', '%s' % id)
+            self.log_path = log_path
             self.logger = SummaryWriter(log_path)
 
         self.log_string('git', git_info)
