@@ -39,15 +39,17 @@ class InferenceCore:
         # self.all_labels = [l.item() for l in all_labels]
         self.all_labels = all_labels
 
-    def step(self, image, flow, mask=None, valid_labels=None, end=False):
+    def step(self, image, flow=None, mask=None, valid_labels=None, end=False):
         # image: 3*H*W
         # flow: 2*H*W
         # mask: num_objects*H*W or None
         self.curr_ti += 1
         image, self.pad = pad_divide_by(image, 16)
-        flow, _ = pad_divide_by(flow, 16)
+        if flow != None:
+            flow, _ = pad_divide_by(flow, 16)
+            flow = flow.unsqueeze(0) # add the batch dimension
         image = image.unsqueeze(0) # add the batch dimension
-        flow = flow.unsqueeze(0) # add the batch dimension
+        
         # print(f'imageshape:{image.shape}')
         # print(f'flowshape:{flow.shape}')
 
@@ -63,12 +65,14 @@ class InferenceCore:
                                                     need_ek=(self.enable_long_term or need_segment), 
                                                     need_sk=is_mem_frame)
         multi_scale_features = (f16, f8, f4)
-        flow_feat = self.network.encode_flow(flow)
+        if flow != None:
+            flow_feat = self.network.encode_flow(flow)
 
         # segment the current frame is needed
         if need_segment:
             memory_readout = self.memory.match_memory(key, selection).unsqueeze(0)
-            memory_readout = self.network.fuse_flow_value(memory_readout, flow_feat)
+            if flow != None:
+                memory_readout = self.network.fuse_flow_value(memory_readout, flow_feat)
             
             hidden, _, pred_prob_with_bg = self.network.segment(multi_scale_features, memory_readout, 
                                     self.memory.get_hidden(), h_out=is_normal_update, strip_bg=False)

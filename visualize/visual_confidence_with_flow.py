@@ -29,7 +29,7 @@ from inference.inference_core import InferenceCore
 from progressbar import progressbar
 import cv2
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
-
+import seaborn
 torch.set_grad_enabled(False)
 
 # default configuration
@@ -46,7 +46,8 @@ config = {
 }
 
 ROOT_PATH = '../val_data'
-vid = 'P01_01_190'
+vid = 'P01_14_90'
+conf_save_path = '../visuals'
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
@@ -67,7 +68,8 @@ if not os.path.isdir(mask_save_path):
     os.makedirs(mask_save_path)
 if not os.path.isdir(draw_save_path):
     os.makedirs(draw_save_path)
-
+if not os.path.isdir(f"{conf_save_path}/{vid.split('_')[0]}/conf/{vid}/"):
+    os.makedirs(f"{conf_save_path}/{vid.split('_')[0]}/conf/{vid}/")
 mask = np.array(Image.open(mask_name).convert('1'),dtype=np.int32)
 print(np.unique(mask))
 print(mask.shape)
@@ -112,7 +114,7 @@ with torch.cuda.amp.autocast(enabled=True):
 
         flow = flow.transpose(0, 1, 2)
         # print(f'flow_shape:{flow.shape}')
-        flow_torch = torch.from_numpy(flow).float().to(device)# /255
+        flow_torch = torch.from_numpy(flow).float().to(device)/255
         
         if current_frame_index == 0:
             # initialize with the mask
@@ -126,24 +128,24 @@ with torch.cuda.amp.autocast(enabled=True):
 
         # argmax, convert to numpy
         # 0,1
-        prediction = torch_prob_to_numpy_mask(prediction)
-        
-        # plt.imsave(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1]}", prediction*255)
-        
-        # if current_frame_index % visualize_every == 0:
-        visualization = overlay_davis(frame, prediction)
-            # print(prediction.shape)
-            # print(visualization.shape)
-        plt.imsave(f"{draw_save_path}/{frame_path.split('/')[-1]}", visualization)
+        prediction = torch.abs(prediction[0] - prediction[1]).cpu().numpy()
+        # print(prediction.shape)
+        # ddddd
+        # prediction = torch_prob_to_numpy_mask(prediction)
+        # print(prediction.shape)
+        plt.figure()
+        ax = seaborn.heatmap(prediction, cmap='coolwarm', vmin=0, vmax=1, )
+        ax.get_figure().savefig(f"{conf_save_path}/{vid.split('_')[0]}/conf/{vid}/{frame_path.split('/')[-1]}")
+        plt.clf()
 
         current_frame_index += 1
-import imageio.v2 as imageio
-images = []
-for frame_path in sorted(glob.glob(f'{draw_save_path}/*.jpg')):
-    im = imageio.imread(frame_path)
-    images.append(im)
-if not os.path.exists(f'../visuals/{partition_id}/flow_gif/{video_id}/'):
-    os.makedirs(f'../visuals/{partition_id}/flow_gif/{video_id}/')
+# import imageio.v2 as imageio
+# images = []
+# for frame_path in sorted(glob.glob(f'{draw_save_path}/*.jpg')):
+#     im = imageio.imread(frame_path)
+#     images.append(im)
+# if not os.path.exists(f'../visuals/{partition_id}/flow_gif/{video_id}/'):
+#     os.makedirs(f'../visuals/{partition_id}/flow_gif/{video_id}/')
     
-imageio.mimsave(f'../visuals/{partition_id}/flow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
-# f'../visuals/{partition_id}/flow_draw/{video_id}/{vid}'
+# imageio.mimsave(f'../visuals/{partition_id}/flow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
+# # f'../visuals/{partition_id}/flow_draw/{video_id}/{vid}'
