@@ -286,7 +286,7 @@ class XMemTrainer:
                                 try:
                                     for name, img_list in masks:
                                         for i,img in enumerate(img_list):
-                                            plt.imsave(f"{name}_{i}", img)
+                                            plt.imsave(f"{self.logger.log_path}/{name}_{i}.jpg", img)
                                 except:
                                     pass
 
