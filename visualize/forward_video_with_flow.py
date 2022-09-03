@@ -112,7 +112,7 @@ with torch.cuda.amp.autocast(enabled=True):
 
         flow = flow.transpose(0, 1, 2)
         # print(f'flow_shape:{flow.shape}')
-        flow_torch = torch.from_numpy(flow).float().to(device)/255
+        flow_torch = torch.from_numpy(flow).float().to(device)# /255
         
         if current_frame_index == 0:
             # initialize with the mask

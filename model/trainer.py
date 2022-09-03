@@ -54,10 +54,18 @@ class XMemTrainer:
         self.train()
 
         # [TODO]: freeze key encoder 和 value encoder
-        for param in self.XMem.module.key_encoder.parameters():
-            param.requires_grad = False
-        for param in self.XMem.module.value_encoder.parameters():
-            param.requires_grad = False
+        if self.config['use_flow']:
+            for param in self.XMem.module.key_encoder.parameters():
+                param.requires_grad = False
+            for param in self.XMem.module.value_encoder.parameters():
+                param.requires_grad = False
+        else:
+            for param in self.XMem.module.flow_encoder.parameters():
+                param.requires_grad = False
+            for param in self.XMem.module.flow_value_fuser.parameters():
+                param.requires_grad = False
+            print('----------------------------')
+            print('not using flow information!!')
 
         self.optimizer = optim.AdamW(filter(
             lambda p: p.requires_grad, self.XMem.parameters()), lr=config['lr'], weight_decay=config['weight_decay'])
@@ -112,8 +120,8 @@ class XMemTrainer:
             # 正常的attention是query和key做内积，找出interest的区域，这里因为是frame - frame的对应，
             # 所以qk和mk的内积充当了key的角色，qe selection充当了query的角色
             key, shrinkage, selection, f16, f8, f4 = self.XMem('encode_key', frames)
-            
-            flow_feats = self.XMem('encode_flow', flows) # B x num_frames x Cf x H/P x W/P; Cf =256
+            if self.config['use_flow']:
+                flow_feats = self.XMem('encode_flow', flows) # B x num_frames x Cf x H/P x W/P; Cf =256
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
@@ -160,8 +168,8 @@ class XMemTrainer:
                 # Segment frame ti, selection就是query_selection
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
-                
-                memory_readout = self.XMem('fuse_flow_value', memory_readout, flow_feats[:,ti]) # shape不变
+                if self.config['use_flow']:
+                    memory_readout = self.XMem('fuse_flow_value', memory_readout, flow_feats[:,ti]) # shape不变
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))
                 args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
@@ -198,7 +206,8 @@ class XMemTrainer:
             f16 = torch.flip(f16, [1])
             f8 = torch.flip(f8, [1])
             f4 = torch.flip(f4, [1])
-            flow_feats = torch.flip(flow_feats, [1])
+            if self.config['use_flow']:
+                flow_feats = torch.flip(flow_feats, [1])
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
@@ -245,8 +254,8 @@ class XMemTrainer:
                 # Segment frame ti, selection就是query_selection
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
-                
-                memory_readout = self.XMem('fuse_flow_value', memory_readout, flow_feats[:,ti]) # shape不变
+                if self.config['use_flow']:
+                    memory_readout = self.XMem('fuse_flow_value', memory_readout, flow_feats[:,ti]) # shape不变
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))
                 args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
@@ -289,7 +298,7 @@ class XMemTrainer:
                                 max_num_objects = max(num_filled_objects[:b])
                                 if not os.path.exists(f"{self.logger.log_path}/it={it}_mask"):
                                     os.makedirs(f"{self.logger.log_path}/it={it}_mask")
-                                print(images['first_last_frame_gt'][0][0,0].detach().cpu())
+                                # print(images['first_last_frame_gt'][0][0,0].detach().cpu())
                                 for bi in range(b):
                                     for oi in range(max_num_objects):
                                         plt.imsave(f"{self.logger.log_path}/it={it}_mask/gt_t=0_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][0,oi].detach().cpu(), cmap='gray')
