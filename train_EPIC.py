@@ -62,15 +62,16 @@ def get_EPIC_parser():
     # Logging information
     parser.add_argument('--log_text_interval', default=100, type=int)
     parser.add_argument('--log_image_interval', default=250, type=int)
-    parser.add_argument('--save_network_interval', default=25000, type=int)
-    parser.add_argument('--save_checkpoint_interval', default=50000, type=int)
+    parser.add_argument('--save_network_interval', default=5000, type=int)
+    parser.add_argument('--save_checkpoint_interval', default=15000, type=int)
     parser.add_argument('--exp_id', help='Experiment UNIQUE id, use NULL to disable logging to tensorboard', default='NULL')
     parser.add_argument('--debug', help='Debug mode which logs information more often', action='store_true')
+    parser.add_argument('--no_flow', help='without using flow information', action='store_true')
 
     # # Multiprocessing parameters, not set by users
     parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
     args = parser.parse_args()
-    return {**vars(args), **{'amp': not args.no_amp}}
+    return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': not args.no_flow}}
 
 """
 Initial setup

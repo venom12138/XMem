@@ -86,6 +86,8 @@ class LossComputer:
         losses['total_loss'] = 0
         for ti in range(0, t):
             weight = self.end_w + (self.start_w - self.end_w) * (ti / t)
+            weight = torch.tensor(weight, dtype=torch.float).cuda()
+            weight.requires_grad=False
             for bi in range(b):
                 if ti == t-1:
                     loss, p = self.bce(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,1,0], it)
@@ -93,9 +95,11 @@ class LossComputer:
                     loss, p = self.bce(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,0,0], it)
                 else:
                     if it%2 == 0:
-                        loss, p = weight * self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
+                        loss, p = self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
+                        loss = loss * weight
                     else:
-                        loss, p = (1-weight+self.end_w) * self.bkl(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it)
+                        loss, p = self.bkl(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it)
+                        loss = loss * (1-weight+self.end_w)
                 losses['p'] += p / b / (t-1)
                 losses[f'ce_loss_{ti}'] += loss / b
 
@@ -107,8 +111,8 @@ class LossComputer:
             elif ti == t - 1:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data['cls_gt'][:,1,0]) # dice loss评估相似性 X交Y/X+Y
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
-            else:
-                losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data[f'bmasks_{ti}'])
-                losses['total_loss'] += losses[f'dice_loss_{ti}']
+            # else:
+            #     losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data[f'bmasks_{ti}'])
+            #     losses['total_loss'] += losses[f'dice_loss_{ti}']
 
         return losses
