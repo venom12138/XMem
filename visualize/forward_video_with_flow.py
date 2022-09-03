@@ -46,12 +46,12 @@ config = {
 }
 
 ROOT_PATH = '../val_data'
-vid = 'P08_16_100'
+vid = 'P01_14_90'
 use_flow = True 
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
-ckpt_path = '../saves/Sep02_16.49.44_test_0902_noflow_epic_5000.pth'
+ckpt_path = '../saves/Sep02_16.49.44_test_0902_noflow_epic_25000.pth'
 if 'noflow' in ckpt_path:
     use_flow = False
     print('not use flow !!!!!!!!!!!')
