@@ -67,6 +67,7 @@ def get_EPIC_parser():
     parser.add_argument('--exp_id', help='Experiment UNIQUE id, use NULL to disable logging to tensorboard', default='NULL')
     parser.add_argument('--debug', help='Debug mode which logs information more often', action='store_true')
     parser.add_argument('--no_flow', help='without using flow information', action='store_true')
+    parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
 
     # # Multiprocessing parameters, not set by users
     parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')

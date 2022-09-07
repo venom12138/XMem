@@ -54,18 +54,21 @@ class XMemTrainer:
         self.train()
 
         # [TODO]: freeze key encoder 和 value encoder
-        if self.config['use_flow']:
-            for param in self.XMem.module.key_encoder.parameters():
-                param.requires_grad = False
-            for param in self.XMem.module.value_encoder.parameters():
-                param.requires_grad = False
+        if self.config['freeze'] == 1:
+            if self.config['use_flow']:
+                for param in self.XMem.module.key_encoder.parameters():
+                    param.requires_grad = False
+                for param in self.XMem.module.value_encoder.parameters():
+                    param.requires_grad = False
+            else:
+                for param in self.XMem.module.flow_encoder.parameters():
+                    param.requires_grad = False
+                for param in self.XMem.module.flow_value_fuser.parameters():
+                    param.requires_grad = False
+                print('----------------------------')
+                print('not using flow information!!')
         else:
-            for param in self.XMem.module.flow_encoder.parameters():
-                param.requires_grad = False
-            for param in self.XMem.module.flow_value_fuser.parameters():
-                param.requires_grad = False
-            print('----------------------------')
-            print('not using flow information!!')
+            print('not freeze!!!')
 
         self.optimizer = optim.AdamW(filter(
             lambda p: p.requires_grad, self.XMem.parameters()), lr=config['lr'], weight_decay=config['weight_decay'])
