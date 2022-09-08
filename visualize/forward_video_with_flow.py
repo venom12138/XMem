@@ -45,13 +45,13 @@ config = {
     'max_long_term_elements': 10000,
 }
 
-ROOT_PATH = '../val_data'
-vid = 'P01_14_90'
+ROOT_PATH = '../data'
+vid = 'P01_01_37'
 use_flow = True 
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
-ckpt_path = '../saves/Sep02_16.49.44_test_0902_noflow_epic_25000.pth'
+ckpt_path = '/cluster/home2/yjw/venom/XMem/saves/Sep02_16.49.44_test_0902_noflow_epic/Sep02_16.49.44_test_0902_noflow_epic_25000.pth'
 if 'noflow' in ckpt_path:
     use_flow = False
     print('not use flow !!!!!!!!!!!')

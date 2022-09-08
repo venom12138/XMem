@@ -222,6 +222,7 @@ class XMem(nn.Module):
         # Maps SO weight (without other_mask) to MO weight (with other_mask)
         load_strict = False
         for k in list(src_dict.keys()):
+            
             if ('flow_encoder' in k) or ('flow_value_fuser' in k):
                 load_strict = True
             if k == 'value_encoder.conv1.weight':
@@ -234,6 +235,7 @@ class XMem(nn.Module):
                     else:
                         print('Zero-initialized padding.')
                     src_dict[k] = torch.cat([src_dict[k], pads], 1)
+        # print(load_strict)
         sd_before_load = deepcopy(self.state_dict())
         self.load_state_dict(src_dict, strict=load_strict)
         sd_after_load = deepcopy(self.state_dict())
