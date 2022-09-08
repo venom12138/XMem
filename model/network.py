@@ -237,7 +237,8 @@ class XMem(nn.Module):
                     src_dict[k] = torch.cat([src_dict[k], pads], 1)
         # print(load_strict)
         sd_before_load = deepcopy(self.state_dict())
-        self.load_state_dict(src_dict, strict=load_strict)
+        msg = self.load_state_dict(src_dict, strict=load_strict)
+        # print(f'missing keys:{msg}')
         sd_after_load = deepcopy(self.state_dict())
         same_keys = [k for k in sd_before_load if torch.equal(sd_before_load[k], sd_after_load[k])]
         new_keys = []

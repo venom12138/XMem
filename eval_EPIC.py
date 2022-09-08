@@ -15,17 +15,19 @@ from inference.inference_core import InferenceCore
 
 from progressbar import progressbar
 from tqdm import tqdm
-try:
-    import hickle as hkl
-except ImportError:
-    print('Failed to import hickle. Fine if not using multi-scale testing.')
+from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
+
+# try:
+#     import hickle as hkl
+# except ImportError:
+#     print('Failed to import hickle. Fine if not using multi-scale testing.')
 
 
 """
 Arguments loading
 """
 parser = ArgumentParser()
-parser.add_argument('--model', default='/cluster/home2/yjw/venom/XMem/saves/Sep02_10.45.20_test_0902_nframes_3_epic/Sep02_10.45.20_test_0902_nframes_3_epic_25000.pth')
+parser.add_argument('--model', default='./saves/Sep02_10.45.20_test_0902_nframes_3_epic_25000.pth')
 
 # Data options
 parser.add_argument('--EPIC_path', default='./data')
@@ -72,13 +74,11 @@ val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
 torch.autograd.set_grad_enabled(False)
 
 # Load our checkpoint
-network = XMem(config, args.model).eval().cuda()
+network = XMem(config, args.model).cuda().eval()
 
 # if args.model is not None:
 #     model_weights = torch.load(args.model)
-#     print('loading!!!!!!!!!!!!1')
 #     network.load_weights(model_weights, init_as_zero_if_needed=True)
-#     print('loaded!!!!!!!!!!!!!!!')
 # else:
 #     print('No model loaded.')
 
@@ -162,6 +162,7 @@ for data in tqdm(val_loader):
 
             # Probability mask -> index mask
             out_mask = torch.argmax(prob, dim=0)
+            # print(out_mask.shape)
             out_mask = (out_mask.detach().cpu().numpy()).astype(np.uint8)
             # print(out_mask)
             # dd
@@ -175,10 +176,9 @@ for data in tqdm(val_loader):
                 this_out_path = path.join(out_path, partition, video_part, vid_name)
                 os.makedirs(this_out_path, exist_ok=True)
                 # out_mask = mapper.remap_index_mask(out_mask)
-                out_img = Image.fromarray(out_mask)
-                # if vid_reader.get_palette() is not None:
-                #     out_img.putpalette(vid_reader.get_palette())
-                out_img.save(os.path.join(this_out_path, frame))
+                # out_img = Image.fromarray(out_mask)
+                plt.imsave(os.path.join(this_out_path, frame), out_mask, cmap='gray')
+                # out_img.save(os.path.join(this_out_path, frame))
 
             # if args.save_scores:
             #     np_path = path.join(args.output, 'Scores', vid_name)
