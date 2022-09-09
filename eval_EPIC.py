@@ -30,8 +30,8 @@ parser = ArgumentParser()
 parser.add_argument('--model', default='./saves/Sep02_10.45.20_test_0902_nframes_3_epic_25000.pth')
 
 # Data options
-parser.add_argument('--EPIC_path', default='./data')
-parser.add_argument('--yaml_path', default='./data/EPIC55_cut_subset_200.yaml')
+parser.add_argument('--EPIC_path', default='./val_data')
+parser.add_argument('--yaml_path', default='./val_data/EPIC100_state_positive_val.yaml')
 parser.add_argument('--dataset', help='D16/D17/Y18/Y19/LV1/LV3/G', default='EPIC')
 parser.add_argument('--split', help='val/test', default='val')
 parser.add_argument('--output', default=None)
@@ -59,7 +59,7 @@ args = parser.parse_args()
 
 config = vars(args)
 config['enable_long_term'] = not config['disable_long_term']
-
+args.output = f"./output/{args.model.split('/')[-1][:-4]}"
 if args.output is None:
     args.output = f'./output/{args.dataset}_{args.split}'
     print(f'Output path not provided. Defaulting to {args.output}')
@@ -70,7 +70,7 @@ Data preparation
 out_path = args.output
 
 dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
-val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
+val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=2)
 torch.autograd.set_grad_enabled(False)
 
 # Load our checkpoint
@@ -170,7 +170,7 @@ for data in tqdm(val_loader):
             #     prob = (prob.detach().cpu().numpy()*255).astype(np.uint8)
 
             # Save the mask
-            if args.save_all or whether_to_save_mask:
+            if (args.save_all or whether_to_save_mask) and msk is None:
                 partition = vid_name.split('_')[0]
                 video_part = '_'.join(vid_name.split('_')[:2])
                 this_out_path = path.join(out_path, partition, video_part, vid_name)

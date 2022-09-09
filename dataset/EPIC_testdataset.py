@@ -31,7 +31,14 @@ class EPICtestDataset(Dataset):
         with open(os.path.join(yaml_root), 'r') as f:
             self.data_info = yaml.safe_load(f)
         self.vids = list(self.data_info.keys())
-
+        # 将没有标注的都去掉
+        for k in list(self.data_info.keys()):
+            video_value = self.data_info[k]
+            vid_gt_path = path.join(self.data_root, video_value['participant_id'], 'anno_masks', video_value['video_id'], k)
+            frame_name = video_value['start_frame']
+            jpg_name = 'frame_' + str(frame_name).zfill(10)+ '.jpg'
+            if not os.path.isfile(os.path.join(vid_gt_path, jpg_name)):
+                self.vids.remove(k)
         # Final transform without randomness
         self.im_transform = transforms.Compose([
             transforms.ToTensor(),
@@ -69,9 +76,12 @@ class EPICtestDataset(Dataset):
         masks_count = [] # 标记是否当前帧是否有标注的annotation
         flows = []
         target_objects = []
-
+        
         for f_idx in range(len(frames)):
             jpg_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
+            if not os.path.isfile(path.join(vid_gt_path, jpg_name)):
+                if f_idx % 2 == 0:
+                    continue
             if len(video_value['video_id'].split('_')[-1]) == 2:
                 flow_name = 'frame_' + str(int(np.ceil((float(frames[f_idx]) - 3) / 2))).zfill(10)+ '.jpg'
             else:
