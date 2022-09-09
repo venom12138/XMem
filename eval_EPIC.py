@@ -22,12 +22,21 @@ from inference.interact.interactive_utils import image_to_torch, index_numpy_to_
 # except ImportError:
 #     print('Failed to import hickle. Fine if not using multi-scale testing.')
 
+def colorize_mask(mask):
+    # mask: numpy array of the mask
+    new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
+    # h,w = new_mask.size
+    palette = [0,0,0,255,255,255,128,0,0,0,128,0,0,0,128,255,0,0,255,255,0]
+    others = list(np.random.randint(0,255,size=256*3-len(palette)))
+    palette.extend(others)
+    new_mask.putpalette(palette)
 
+    return new_mask
 """
 Arguments loading
 """
 parser = ArgumentParser()
-parser.add_argument('--model', default='./saves/Sep02_10.45.20_test_0902_nframes_3_epic_25000.pth')
+parser.add_argument('--model', default='/home/venom/projects/XMem/saves/XMem.pth')
 
 # Data options
 parser.add_argument('--EPIC_path', default='./val_data')
@@ -42,6 +51,7 @@ parser.add_argument('--benchmark', action='store_true', help='enable to disable 
         
 # Long-term memory options
 parser.add_argument('--disable_long_term', action='store_true')
+parser.add_argument('--not_use_flow', action='store_true')
 parser.add_argument('--max_mid_term_frames', help='T_max in paper, decrease to save memory', type=int, default=10)
 parser.add_argument('--min_mid_term_frames', help='T_min in paper, decrease to save memory', type=int, default=5)
 parser.add_argument('--max_long_term_elements', help='LT_max in paper, increase if objects disappear for a long time', 
@@ -59,6 +69,7 @@ args = parser.parse_args()
 
 config = vars(args)
 config['enable_long_term'] = not config['disable_long_term']
+config['enable_long_term_count_usage'] = True
 args.output = f"./output/{args.model.split('/')[-1][:-4]}"
 if args.output is None:
     args.output = f'./output/{args.dataset}_{args.split}'
@@ -68,6 +79,11 @@ if args.output is None:
 Data preparation
 """
 out_path = args.output
+use_flow = not args.not_use_flow
+if 'noflow' in args.model:
+    use_flow = False
+if use_flow == False:    
+    print('not use flow !!!!!!!!!!!')
 
 dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
 val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=2)
@@ -90,15 +106,15 @@ for data in tqdm(val_loader):
     vid_name = data['info']['name'][0]
     vid_length = data['rgb'][0].shape[0]
     # no need to count usage for LT if the video is not that long anyway
-    config['enable_long_term_count_usage'] = (
-        config['enable_long_term'] and
-        (vid_length
-            / (config['max_mid_term_frames']-config['min_mid_term_frames'])
-            * config['num_prototypes'])
-        >= config['max_long_term_elements']
-    )
+    # config['enable_long_term_count_usage'] = (
+    #     config['enable_long_term'] and
+    #     (vid_length
+    #         / (config['max_mid_term_frames']-config['min_mid_term_frames'])
+    #         * config['num_prototypes'])
+    #     >= config['max_long_term_elements']
+    # )
 
-    mapper = MaskMapper()
+    # mapper = MaskMapper()
     processor = InferenceCore(network, config=config)
     first_mask_loaded = False
 
@@ -108,7 +124,7 @@ for data in tqdm(val_loader):
             flow = data['flow'][0][ti].cuda() # 2*H*W
             if ti == 0:
                 msk = data['first_frame_gt'][0][ti].cuda() # H*W
-                num_objects = msk.shape[0] - 1
+                num_objects = msk.shape[0]
                 processor.set_all_labels(range(1, num_objects+1))
             else:
                 msk = None
@@ -144,9 +160,15 @@ for data in tqdm(val_loader):
 
             # Run the model on this frame
             if msk is not None:
-                prob = processor.step(rgb, flow, msk[1:], end=(ti==vid_length-1))
+                if use_flow:
+                    prob = processor.step(rgb, flow, msk, end=(ti==vid_length-1))
+                else:
+                    prob = processor.step(rgb, flow=None, mask = msk, end=(ti==vid_length-1))
             else:
-                prob = processor.step(rgb, flow, end=(ti==vid_length-1))
+                if use_flow:
+                    prob = processor.step(rgb, flow, end=(ti==vid_length-1))
+                else:
+                    prob = processor.step(rgb, flow=None, end=(ti==vid_length-1))
 
             # Upsample to original size if needed
             if need_resize:
@@ -175,9 +197,11 @@ for data in tqdm(val_loader):
                 video_part = '_'.join(vid_name.split('_')[:2])
                 this_out_path = path.join(out_path, partition, video_part, vid_name)
                 os.makedirs(this_out_path, exist_ok=True)
+                out_mask = colorize_mask(out_mask)
+                out_mask.save(os.path.join(this_out_path, frame.replace('jpg','png')))
                 # out_mask = mapper.remap_index_mask(out_mask)
                 # out_img = Image.fromarray(out_mask)
-                plt.imsave(os.path.join(this_out_path, frame), out_mask, cmap='gray')
+                # plt.imsave(os.path.join(this_out_path, frame.replace('jpg','png')), out_mask*255, cmap='gray')
                 # out_img.save(os.path.join(this_out_path, frame))
 
             # if args.save_scores:

@@ -37,19 +37,20 @@ class EPICtestDataset(Dataset):
             vid_gt_path = path.join(self.data_root, video_value['participant_id'], 'anno_masks', video_value['video_id'], k)
             frame_name = video_value['start_frame']
             jpg_name = 'frame_' + str(frame_name).zfill(10)+ '.jpg'
-            if not os.path.isfile(os.path.join(vid_gt_path, jpg_name)):
+            png_name = 'frame_' + str(frame_name).zfill(10)+ '.png'
+            if not os.path.isfile(os.path.join(vid_gt_path, jpg_name)) and not os.path.isfile(os.path.join(vid_gt_path, png_name)):
                 self.vids.remove(k)
         # Final transform without randomness
         self.im_transform = transforms.Compose([
-            transforms.ToTensor(),
             transforms.Resize((384,384), interpolation=InterpolationMode.BILINEAR),
-            im_normalization,
+            transforms.ToTensor(),
         ])
         self.gt_transform = transforms.Compose([
-            transforms.ToTensor(),
             transforms.Resize((384,384), interpolation=InterpolationMode.NEAREST),
+            transforms.ToTensor(),
         ])
         # 获取第一帧图片的大小
+        
         video_value = self.data_info[self.vids[0]] # video value
         vid_im_path = path.join(self.data_root, video_value['participant_id'], 'rgb_frames', video_value['video_id'], self.vids[0])
         frames = list(range(video_value['start_frame'], video_value['stop_frame']))
@@ -79,9 +80,11 @@ class EPICtestDataset(Dataset):
         
         for f_idx in range(len(frames)):
             jpg_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
-            if not os.path.isfile(path.join(vid_gt_path, jpg_name)):
+            png_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.png'
+            if not os.path.isfile(path.join(vid_gt_path, png_name)):
                 if f_idx % 2 == 0:
                     continue
+                    # pass
             if len(video_value['video_id'].split('_')[-1]) == 2:
                 flow_name = 'frame_' + str(int(np.ceil((float(frames[f_idx]) - 3) / 2))).zfill(10)+ '.jpg'
             else:
@@ -90,7 +93,7 @@ class EPICtestDataset(Dataset):
 
             # 需要保证image、gt和flow做同样的变换，要不然mask就对不上了
             reseed(sequence_seed)
-            this_im = Image.open(path.join(vid_im_path, jpg_name)).convert('RGB')
+            this_im = Image.open(path.join(vid_im_path, jpg_name))# .convert('RGB')
             this_im = self.im_transform(this_im)
 
             reseed(sequence_seed)
@@ -99,13 +102,13 @@ class EPICtestDataset(Dataset):
             reseed(sequence_seed)
             this_flowv = Image.open(path.join(vid_flow_path, 'v', flow_name)).convert('P').resize((384,384))
 
-            if os.path.isfile(path.join(vid_gt_path, jpg_name)):
+            if os.path.isfile(path.join(vid_gt_path, png_name)):
                 masks_count.append(1)
                 if f_idx == 0:
                     reseed(sequence_seed)
-                    this_gt = Image.open(path.join(vid_gt_path, jpg_name)).convert('1')
+                    this_gt = Image.open(path.join(vid_gt_path, png_name)).convert('1')
                     this_gt = self.gt_transform(this_gt)                
-                    this_gt = torch.from_numpy(np.array(this_gt)).squeeze()
+                    this_gt = this_gt.squeeze()
                     masks.append(this_gt)
                     labels = np.unique(this_gt)
             else:
@@ -143,7 +146,7 @@ class EPICtestDataset(Dataset):
 
         # Generate one-hot ground-truth
         cls_gt = np.zeros((1, 384, 384), dtype=np.int32) # 只有1帧有mask
-        first_frame_gt = np.zeros((1, self.max_num_obj, 384, 384), dtype=np.int32)
+        first_frame_gt = np.zeros((1, len(target_objects), 384, 384), dtype=np.int32)
         
         # target_objects是一个list，长度是objects的数量
         for i, l in enumerate(target_objects):
@@ -169,15 +172,15 @@ class EPICtestDataset(Dataset):
 
         # 1 if object exist, 0 otherwise
         # list:len = max_num_obj, 前num_objects个是1，后面是0
-        selector = [1 if i < info['num_objects'] else 0 for i in range(self.max_num_obj)]
+        selector = [1 if i < info['num_objects'] else 0 for i in range(len(target_objects))]
         selector = torch.FloatTensor(selector)
         
         data = {
             'rgb': images, # [num_frames, 3, H, W]
             'flow': flows, # [num_frames, 2, H, W]
-            'first_frame_gt': first_frame_gt, # [1, max_num_obj, H, W] one hot
+            'first_frame_gt': first_frame_gt, # [1, target_objects, H, W] one hot
             'cls_gt': cls_gt, # [1, 1, H, W]
-            'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
+            'selector': selector, # [target_objects] 前num_objects个是1，后面是0
             'info': info,
             'whether_save_mask': masks_count,
         }

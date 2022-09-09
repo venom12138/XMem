@@ -1,6 +1,8 @@
 import torch
 import matplotlib.pyplot as plt
 import glob
+import sys
+sys.path.append('..')
 if torch.cuda.is_available():
   print('Using GPU')
   device = 'cuda'
@@ -29,6 +31,17 @@ import cv2
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
 
 torch.set_grad_enabled(False)
+# palette = [0,1,2,3,4,5,6]
+def colorize_mask(mask):
+    # mask: numpy array of the mask
+    new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
+    # h,w = new_mask.size
+    palette = [0,0,0,255,255,255,128,0,0,0,128,0,0,0,128,255,0,0,255,255,0]
+    others = list(np.random.randint(0,255,size=256*3-len(palette)))
+    palette.extend(others)
+    new_mask.putpalette(palette)
+
+    return new_mask
 
 # default configuration
 config = {
@@ -43,13 +56,13 @@ config = {
     'max_long_term_elements': 10000,
 }
 
-network = XMem(config, './saves/XMem.pth').eval().to(device)
+network = XMem(config, '../saves/XMem.pth').eval().to(device)
 
-mask_save_path = './data/P01/forward_masks/P01_01'
-draw_save_path = './data/P01/forward_draws/P01_01'
-video_path = '/cluster/home2/yjw/venom/XMem/data/P01/positive_frames/P01_01/37'
+mask_save_path = '../visuals/P01/forward_masks/P01_11'
+draw_save_path = '../visuals/P01/forward_draws/P01_11'
+video_path = '/home/venom/projects/XMem/val_data/P01/rgb_frames/P01_11/P01_11_24'
 # use first mask
-mask_name = '/cluster/home2/yjw/venom/EPIC-data/data/P01/first_last_masks/P01_01/37/frame_0000006341.jpg'
+mask_name = '/home/venom/projects/XMem/val_data/P01/anno_masks/P01_11/P01_11_24/frame_0000004415.png'
 uid = video_path.split('/')[-1]
 
 if not os.path.isdir(f"{mask_save_path}/{uid}"):
@@ -57,7 +70,7 @@ if not os.path.isdir(f"{mask_save_path}/{uid}"):
 if not os.path.isdir(f"{draw_save_path}/{uid}"):
     os.makedirs(f"{draw_save_path}/{uid}")
 
-mask = np.array(Image.open(mask_name).convert('1'),dtype=np.int32)
+mask = np.array(Image.open(mask_name).convert('1').resize((384,384)),dtype=np.int32)
 print(np.unique(mask))
 print(mask.shape)
 num_objects = len(np.unique(np.round(mask))) - 1
@@ -79,7 +92,7 @@ current_frame_index = 0
 with torch.cuda.amp.autocast(enabled=True):
     for frame_path in sorted(glob.glob(f'{video_path}/*.jpg')):
         # load frame-by-frame
-        frame = np.array(Image.open(frame_path))
+        frame = np.array(Image.open(frame_path).resize((384,384)))
         # plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", frame)
         print(frame_path)
         if frame is None or current_frame_index > frames_to_propagate:
@@ -92,7 +105,7 @@ with torch.cuda.amp.autocast(enabled=True):
             mask_torch = index_numpy_to_one_hot_torch(mask, num_objects+1).to(device)
             
             # the background mask is not fed into the model
-            prediction = processor.step(frame_torch, mask_torch[1:])
+            prediction = processor.step(frame_torch, mask = mask_torch[1:])
         else:
             # propagate only
             prediction = processor.step(frame_torch)
@@ -100,8 +113,9 @@ with torch.cuda.amp.autocast(enabled=True):
         # argmax, convert to numpy
         # 0,1
         prediction = torch_prob_to_numpy_mask(prediction)
-        
-        # plt.imsave(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1]}", prediction*255)
+        mask_img = colorize_mask(prediction)
+        mask_img.save(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1].replace('jpg', 'png')}")
+        # plt.imsave(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1]}", prediction*255, cmap='gray')
         
         # if current_frame_index % visualize_every == 0:
         visualization = overlay_davis(frame, prediction)
