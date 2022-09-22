@@ -70,15 +70,17 @@ args = parser.parse_args()
 config = vars(args)
 config['enable_long_term'] = not config['disable_long_term']
 config['enable_long_term_count_usage'] = True
-args.output = f"./output/{args.model.split('/')[-1][:-4]}"
+
 if args.output is None:
-    args.output = f'./output/{args.dataset}_{args.split}'
+    # args.output = f'./output/{args.dataset}_{args.split}'
+    args.output = f"./output/{args.model.split('/')[-1][:-4]}"
     print(f'Output path not provided. Defaulting to {args.output}')
 
 """
 Data preparation
 """
 out_path = args.output
+print(out_path)
 use_flow = not args.not_use_flow
 if 'noflow' in args.model:
     use_flow = False
@@ -118,7 +120,7 @@ for data in tqdm(val_loader):
     processor = InferenceCore(network, config=config)
     first_mask_loaded = False
 
-    for ti in range(vid_length):
+    for ti in (range(vid_length)):
         with torch.cuda.amp.autocast(enabled=not args.benchmark):
             rgb = data['rgb'][0][ti].cuda() # 3*H*W
             flow = data['flow'][0][ti].cuda() # 2*H*W
@@ -192,7 +194,9 @@ for data in tqdm(val_loader):
             #     prob = (prob.detach().cpu().numpy()*255).astype(np.uint8)
 
             # Save the mask
+            # print(whether_to_save_mask)
             if (args.save_all or whether_to_save_mask) and msk is None:
+                # print('save')
                 partition = vid_name.split('_')[0]
                 video_part = '_'.join(vid_name.split('_')[:2])
                 this_out_path = path.join(out_path, partition, video_part, vid_name)

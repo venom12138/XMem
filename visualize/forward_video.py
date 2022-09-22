@@ -57,12 +57,15 @@ config = {
 }
 
 network = XMem(config, '../saves/XMem.pth').eval().to(device)
-
-mask_save_path = '../visuals/P01/forward_masks/P01_11'
-draw_save_path = '../visuals/P01/forward_draws/P01_11'
-video_path = '/home/venom/projects/XMem/val_data/P01/rgb_frames/P01_11/P01_11_24'
+uid = 'P01_01_37'
+part = uid.split('_')[0]
+video_id = '_'.join(uid.split('_')[:2])
+mask_save_path = f'../visuals/forward_masks/{part}/{video_id}'
+draw_save_path = f'../visuals/forward_draws/{part}/{video_id}'
+video_path = f'/home/venom/projects/XMem/data/{part}/rgb_frames/{video_id}/{uid}'
 # use first mask
-mask_name = '/home/venom/projects/XMem/val_data/P01/anno_masks/P01_11/P01_11_24/frame_0000004415.png'
+mask_name = f'/home/venom/projects/XMem/data/{part}/anno_masks/{video_id}/{uid}/frame_0000006341.png'
+
 uid = video_path.split('/')[-1]
 
 if not os.path.isdir(f"{mask_save_path}/{uid}"):
@@ -93,6 +96,8 @@ with torch.cuda.amp.autocast(enabled=True):
     for frame_path in sorted(glob.glob(f'{video_path}/*.jpg')):
         # load frame-by-frame
         frame = np.array(Image.open(frame_path).resize((384,384)))
+        frame_raw = np.array(Image.open(frame_path))
+
         # plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", frame)
         print(frame_path)
         if frame is None or current_frame_index > frames_to_propagate:
@@ -109,24 +114,25 @@ with torch.cuda.amp.autocast(enabled=True):
         else:
             # propagate only
             prediction = processor.step(frame_torch)
-
+        prediction = F.interpolate(prediction.unsqueeze(1), (256,456), mode='bilinear', align_corners=False)[:,0]
+        
         # argmax, convert to numpy
         # 0,1
         prediction = torch_prob_to_numpy_mask(prediction)
         mask_img = colorize_mask(prediction)
         mask_img.save(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1].replace('jpg', 'png')}")
-        # plt.imsave(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1]}", prediction*255, cmap='gray')
         
         # if current_frame_index % visualize_every == 0:
-        visualization = overlay_davis(frame, prediction)
+        visualization = overlay_davis(frame_raw, prediction)
+        # print(visualization)
             # print(prediction.shape)
             # print(visualization.shape)
         plt.imsave(f"{draw_save_path}/{uid}/{frame_path.split('/')[-1]}", visualization)
 
         current_frame_index += 1
-import imageio.v2 as imageio
-images = []
-for frame_path in sorted(glob.glob(f'{draw_save_path}/{uid}/*.jpg')):
-    im = imageio.imread(frame_path)
-    images.append(im)
-imageio.mimsave(f"/cluster/home2/yjw/venom/EPIC-data/data/P01/forward_gif/{uid}.gif", images, 'GIF', duration=0.05)
+# import imageio.v2 as imageio
+# images = []
+# for frame_path in sorted(glob.glob(f'{draw_save_path}/{uid}/*.jpg')):
+#     im = imageio.imread(frame_path)
+#     images.append(im)
+# imageio.mimsave(f"/cluster/home2/yjw/venom/EPIC-data/data/P01/forward_gif/{uid}.gif", images, 'GIF', duration=0.05)

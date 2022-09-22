@@ -25,7 +25,7 @@ class EPICtestDataset(Dataset):
     - Apply random transform to each of the frame
     - The distance between frames is controlled
     """
-    def __init__(self, data_root, yaml_root, max_num_obj=3, finetune=False):
+    def __init__(self, data_root, yaml_root, max_num_obj=3, ):
         self.data_root = data_root
         self.max_num_obj = max_num_obj
         with open(os.path.join(yaml_root), 'r') as f:

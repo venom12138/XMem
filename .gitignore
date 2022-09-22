@@ -140,3 +140,4 @@ dmypy.json
 /output/
 /visuals/
 /val_data/
+*.sh

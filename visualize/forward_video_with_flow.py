@@ -45,13 +45,13 @@ config = {
     'max_long_term_elements': 10000,
 }
 
-ROOT_PATH = '../data'
-vid = 'P01_01_37'
+ROOT_PATH = '/home/venom/data/EPIC_train_split'
+vid = 'P04_01_160'
 use_flow = True 
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
-ckpt_path = '/cluster/home2/yjw/venom/XMem/saves/Sep02_16.49.44_test_0902_noflow_epic/Sep02_16.49.44_test_0902_noflow_epic_25000.pth'
+ckpt_path = '/home/venom/projects/XMem/saves/Sep02_10.45.20_test_0902_nframes_3_epic_25000.pth'
 if 'noflow' in ckpt_path:
     use_flow = False
     print('not use flow !!!!!!!!!!!')
@@ -68,7 +68,7 @@ u_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/u'
 v_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/v'
 
 # use first mask
-mask_name = sorted(glob.glob(f'{ROOT_PATH}/{partition_id}/anno_masks/{video_id}/{vid}/*.jpg'))[0]
+mask_name = sorted(glob.glob(f'{ROOT_PATH}/{partition_id}/anno_masks/{video_id}/{vid}/*.png'))[0]
 
 if not os.path.isdir(mask_save_path):
     os.makedirs(mask_save_path)
