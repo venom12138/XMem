@@ -13,7 +13,7 @@ from dataset.range_transform import im_normalization, im_mean
 from dataset.reseed import reseed
 import yaml
 import matplotlib.pyplot as plt
-
+from glob import glob
 class EPICDataset(Dataset):
     """
     Works for EPIC training
@@ -32,6 +32,12 @@ class EPICDataset(Dataset):
         with open(os.path.join(yaml_root), 'r') as f:
             self.data_info = yaml.safe_load(f)
         self.vids = list(self.data_info.keys())
+        for key in self.vids:
+            PART = key.split('_')[0]
+            VIDEO_ID = '_'.join(key.split('_')[:2])
+            vid_gt_path = os.path.join(self.data_root, PART, 'anno_masks', VIDEO_ID, key)
+            if len(glob(vid_gt_path)) < 2:
+                self.vids.remove(key)
         assert num_frames >= 3
         # These set of transform is the same for im/gt pairs, but different among the 3 sampled frames
         self.pair_im_lone_transform = transforms.Compose([
@@ -114,6 +120,7 @@ class EPICDataset(Dataset):
             target_objects = []
             for f_idx in frames_idx:
                 jpg_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
+                png_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.png'
                 if len(video_value['video_id'].split('_')[-1]) == 2:
                     flow_name = 'frame_' + str(int(np.ceil((float(frames[f_idx]) - 3) / 2))).zfill(10)+ '.jpg'
                 else:
@@ -136,7 +143,7 @@ class EPICDataset(Dataset):
 
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
                     reseed(sequence_seed)
-                    this_gt = Image.open(path.join(vid_gt_path, jpg_name)).convert('1')
+                    this_gt = Image.open(path.join(vid_gt_path, png_name)).convert('1')
                     this_gt = self.all_gt_dual_transform(this_gt)
                     
 

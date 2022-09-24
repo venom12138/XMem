@@ -23,12 +23,12 @@ def get_EPIC_parser():
     parser = ArgumentParser()
 
     # Enable torch.backends.cudnn.benchmark -- Faster in some cases, test in your own environment
-    parser.add_argument('--benchmark', action='store_true')
+    parser.add_argument('--benchmark', action='store_true', default=True)
     parser.add_argument('--no_amp', action='store_true')
 
     # Data parameters
-    parser.add_argument('--epic_root', help='EPIC data root', default='./data') # TODO
-    parser.add_argument('--yaml_root', help='yaml root', default='./data/EPIC55_cut_subset_200.yaml')
+    parser.add_argument('--epic_root', help='EPIC data root', default='./data/EPIC_train') # TODO
+    parser.add_argument('--yaml_root', help='yaml root', default='./data/EPIC_train/EPIC100_state_positive_train.yaml')
     parser.add_argument('--num_workers', help='Total number of dataloader workers across all GPUs processes', type=int, default=16)
 
     parser.add_argument('--key_dim', default=64, type=int)
@@ -42,7 +42,7 @@ def get_EPIC_parser():
     Batch sizes are effective -- you don't have to scale them when you scale the number processes
     """
     parser.add_argument('--batch_size', default=8, type=int)
-    parser.add_argument('--iterations', default=75000, type=int)
+    parser.add_argument('--iterations', default=25000, type=int)
     parser.add_argument('--finetune', default=10000, type=int)
     parser.add_argument('--steps', nargs="*", default=[60000], type=int)
     parser.add_argument('--lr', help='Initial learning rate', default=1e-5, type=float)
@@ -61,7 +61,7 @@ def get_EPIC_parser():
 
     # Logging information
     parser.add_argument('--log_text_interval', default=100, type=int)
-    parser.add_argument('--log_image_interval', default=250, type=int)
+    parser.add_argument('--log_image_interval', default=2500, type=int)
     parser.add_argument('--save_network_interval', default=5000, type=int)
     parser.add_argument('--save_checkpoint_interval', default=15000, type=int)
     parser.add_argument('--exp_id', help='Experiment UNIQUE id, use NULL to disable logging to tensorboard', default='NULL')
@@ -85,8 +85,8 @@ print(f'CUDA Device count: {torch.cuda.device_count()}')
 # 只针对于EPIC数据集
 config = get_EPIC_parser()
 
-if config['benchmark']:
-    torch.backends.cudnn.benchmark = True
+# if config['benchmark']:
+torch.backends.cudnn.benchmark = True
 
 local_rank = torch.distributed.get_rank()
 world_size = torch.distributed.get_world_size()
