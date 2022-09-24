@@ -1,6 +1,6 @@
 import os
 from os import path, replace
-
+import math
 import torch
 from torch.utils.data.dataset import Dataset
 from torchvision import transforms
@@ -31,13 +31,16 @@ class EPICDataset(Dataset):
         self.max_num_obj = max_num_obj
         with open(os.path.join(yaml_root), 'r') as f:
             self.data_info = yaml.safe_load(f)
-        self.vids = list(self.data_info.keys())
-        for key in self.vids:
+        self.vids = [] 
+        for key in list(self.data_info.keys()):
             PART = key.split('_')[0]
             VIDEO_ID = '_'.join(key.split('_')[:2])
             vid_gt_path = os.path.join(self.data_root, PART, 'anno_masks', VIDEO_ID, key)
-            if len(glob(vid_gt_path)) < 2:
-                self.vids.remove(key)
+            # print(vid_gt_path)
+            # print(glob(vid_gt_path))
+            
+            if len(glob(f"{vid_gt_path}/*.png")) >= 2:
+                self.vids.append(key)
         assert num_frames >= 3
         # These set of transform is the same for im/gt pairs, but different among the 3 sampled frames
         self.pair_im_lone_transform = transforms.Compose([
@@ -122,7 +125,37 @@ class EPICDataset(Dataset):
                 jpg_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
                 png_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.png'
                 if len(video_value['video_id'].split('_')[-1]) == 2:
+                    flow_idx = int(np.ceil((float(frames[f_idx]) - 3) / 2))
                     flow_name = 'frame_' + str(int(np.ceil((float(frames[f_idx]) - 3) / 2))).zfill(10)+ '.jpg'
+                    while True:
+                        if os.path.exists(path.join(vid_flow_path, 'u', flow_name)):
+                            break
+                        else:
+                            for i in range(100):
+                                flow_name = 'frame_' + str(flow_idx - i).zfill(10)+ '.jpg'
+                                if os.path.exists(path.join(vid_flow_path, 'u', flow_name)):
+                                    left_flow_idx = flow_idx - i
+                                    break
+                                else:
+                                    left_flow_idx = flow_idx - i
+                            for i in range(100):
+                                flow_name = 'frame_' + str(flow_idx + i).zfill(10)+ '.jpg'
+                                if os.path.exists(path.join(vid_flow_path, 'u', flow_name)):
+                                    right_flow_idx = flow_idx + i
+                                    break
+                                else:
+                                    right_flow_idx = flow_idx + i
+                            # print(np.abs(right_flow_idx - flow_idx), np.abs(flow_idx - left_flow_idx))
+                            if np.minimum(np.abs(right_flow_idx - flow_idx), np.abs(left_flow_idx - flow_idx)) > 20:
+                                print('Warning: flow frame too large')
+                            if np.abs(right_flow_idx - flow_idx) > np.abs(left_flow_idx - flow_idx):
+                                flow_idx = left_flow_idx
+                            else:
+                                flow_idx = right_flow_idx
+                            
+                            flow_name = 'frame_' + str(flow_idx).zfill(10)+ '.jpg'
+                            break 
+                        # raise ValueError(f"flow file not exist:{path.join(vid_flow_path, 'u', flow_name)}")
                 else:
                     flow_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
                 info['frames'].append(jpg_name)

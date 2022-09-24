@@ -27,8 +27,8 @@ def get_EPIC_parser():
     parser.add_argument('--no_amp', action='store_true')
 
     # Data parameters
-    parser.add_argument('--epic_root', help='EPIC data root', default='./data/EPIC_train') # TODO
-    parser.add_argument('--yaml_root', help='yaml root', default='./data/EPIC_train/EPIC100_state_positive_train.yaml')
+    parser.add_argument('--epic_root', help='EPIC data root', default='/u/ryanxli/venom/XMem/data/EPIC_train') # TODO
+    parser.add_argument('--yaml_root', help='yaml root', default='/u/ryanxli/venom/XMem/data/EPIC_train/EPIC100_state_positive_train.yaml')
     parser.add_argument('--num_workers', help='Total number of dataloader workers across all GPUs processes', type=int, default=16)
 
     parser.add_argument('--key_dim', default=64, type=int)
