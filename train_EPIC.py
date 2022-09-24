@@ -51,7 +51,6 @@ def get_EPIC_parser():
     parser.add_argument('--start_warm', default=10000, type=int)
     parser.add_argument('--end_warm', default=35000, type=int)
 
-
     parser.add_argument('--gamma', help='LR := LR*gamma at every decay step', default=0.1, type=float)
     parser.add_argument('--weight_decay', default=0.05, type=float)
 
@@ -71,6 +70,7 @@ def get_EPIC_parser():
 
     # # Multiprocessing parameters, not set by users
     parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
+    parser.add_argument('--en_wandb', action='store_true')
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': not args.no_flow}}
 
