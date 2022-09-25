@@ -143,4 +143,5 @@ dmypy.json
 /valid_data/
 /train_data/
 /EPIC_train/
+/wandb/
 *.sh
