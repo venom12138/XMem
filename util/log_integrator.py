@@ -53,8 +53,8 @@ class Integrator:
         self.counts = {}
 
     # Average and output the metrics
-    def finalize(self, prefix, it, f=None):
-
+    def finalize(self, ):
+        output_dict = {}
         for hook in self.hooks:
             k, v = hook(self.values)
             self.add_tensor(k, v)
@@ -73,8 +73,11 @@ class Integrator:
 
                 if self.local_rank == 0:
                     avg = (avg/self.world_size).cpu().item()
-                    self.logger.log_metrics(prefix, k, avg, it, f)
+                    output_dict.update({k: avg})
+                    # self.logger.log_metrics(prefix, k, avg, it, f)
             else:
                 # Simple does it
-                self.logger.log_metrics(prefix, k, avg, it, f)
+                # self.logger.log_metrics(prefix, k, avg, it, f)
+                output_dict.update({k: avg})
+        return output_dict
 

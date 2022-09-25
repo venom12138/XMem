@@ -1,7 +1,7 @@
 import datetime
 from os import path
 import math
-import git
+# import git
 
 import random
 import numpy as np
@@ -18,6 +18,7 @@ from util.logger import TensorboardLogger
 from util.configuration import Configuration
 from util.load_subset import load_sub_davis, load_sub_yv
 from argparse import ArgumentParser
+from util.exp_handler import *
 
 def get_EPIC_parser():
     parser = ArgumentParser()
@@ -27,8 +28,8 @@ def get_EPIC_parser():
     parser.add_argument('--no_amp', action='store_true')
 
     # Data parameters
-    parser.add_argument('--epic_root', help='EPIC data root', default='/u/ryanxli/venom/XMem/data/EPIC_train') # TODO
-    parser.add_argument('--yaml_root', help='yaml root', default='/u/ryanxli/venom/XMem/data/EPIC_train/EPIC100_state_positive_train.yaml')
+    parser.add_argument('--epic_root', help='EPIC data root', default='./EPIC_train') # TODO
+    parser.add_argument('--yaml_root', help='yaml root', default='./EPIC_train/EPIC100_state_positive_train.yaml')
     parser.add_argument('--num_workers', help='Total number of dataloader workers across all GPUs processes', type=int, default=16)
 
     parser.add_argument('--key_dim', default=64, type=int)
@@ -63,7 +64,7 @@ def get_EPIC_parser():
     parser.add_argument('--log_image_interval', default=2500, type=int)
     parser.add_argument('--save_network_interval', default=5000, type=int)
     parser.add_argument('--save_checkpoint_interval', default=15000, type=int)
-    parser.add_argument('--exp_id', help='Experiment UNIQUE id, use NULL to disable logging to tensorboard', default='NULL')
+
     parser.add_argument('--debug', help='Debug mode which logs information more often', action='store_true')
     parser.add_argument('--no_flow', help='without using flow information', action='store_true')
     parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
@@ -99,9 +100,6 @@ torch.manual_seed(14159265)
 np.random.seed(14159265)
 random.seed(14159265)
 
-if config['exp_id'] != 'NULL':
-    config['exp_id'] = config['exp_id'] + '_epic'
-
 config['single_object'] = False
 
 config['num_gpus'] = world_size
@@ -114,24 +112,21 @@ print(f'We are assuming {config["num_gpus"]} GPUs.')
 
 print(f'We are now starting stage EPIC')
 
+if config['debug']:
+    config['batch_size'] = 1
+    config['num_frames'] = 3
+
 """
 Model related
 """
-if local_rank == 0:
-    # Logging
-    if config['exp_id'].lower() != 'null':
-        print('I will take the role of logging!')
-        long_id = '%s_%s' % (datetime.datetime.now().strftime('%b%d_%H.%M.%S'), config['exp_id'])
-    else:
-        long_id = None
-    repo = git.Repo(".")
-    git_info = str(repo.active_branch)+' '+str(repo.head.commit.hexsha)
-    logger = TensorboardLogger(config['exp_id'], long_id, git_info)
-    logger.log_string('hyperpara', str(config))
+if local_rank == 0:    
+    # exp_handler
+    exp = ExpHandler(en_wandb=config['en_wandb'])
+    exp.save_config(config)
 
     # Construct the rank 0 model
-    model = XMemTrainer(config, logger=logger, 
-                    save_path=path.join('saves', long_id, long_id) if long_id is not None else None, 
+    model = XMemTrainer(config, logger=exp, 
+                    save_path=exp._save_dir, 
                     local_rank=local_rank, world_size=world_size).train()
 else:
     # Construct model for other ranks

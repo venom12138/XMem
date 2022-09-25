@@ -47,7 +47,8 @@ class XMemTrainer:
         self.save_path = save_path
         if logger is not None:
             self.last_time = time.time()
-            self.logger.log_string('model_size', str(sum([param.nelement() for param in self.XMem.parameters()])))
+            self.logger.log(f'model_size:{str(sum([param.nelement() for param in self.XMem.parameters()]))}')
+        # 升级版的average_meter 
         self.train_integrator = Integrator(self.logger, distributed=True, local_rank=local_rank, world_size=world_size)
         self.loss_computer = LossComputer(config)
 
@@ -295,34 +296,39 @@ class XMemTrainer:
                                 images = {**data, **out}
                                 size = (384, 384)
                                 masks = pool_pairs(images, size, num_filled_objects)
-                                self.logger.log_cv2('train/pairs', masks, it)
+                                # TODO: wandb add image logging
+                                # self.logger.log_cv2('train/pairs', masks, it)
                                 # try:
                                 b, t = images['rgb'].shape[:2]
                                 max_num_objects = max(num_filled_objects[:b])
-                                if not os.path.exists(f"{self.logger.log_path}/it={it}_mask"):
-                                    os.makedirs(f"{self.logger.log_path}/it={it}_mask")
+                                if not os.path.exists(f"{self.logger._save_dir}/it={it}_mask"):
+                                    os.makedirs(f"{self.logger._save_dir}/it={it}_mask")
                                 # print(images['first_last_frame_gt'][0][0,0].detach().cpu())
                                 for bi in range(b):
                                     for oi in range(max_num_objects):
-                                        plt.imsave(f"{self.logger.log_path}/it={it}_mask/gt_t=0_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][0,oi].detach().cpu(), cmap='gray')
-                                        plt.imsave(f"{self.logger.log_path}/it={it}_mask/gt_t={t-1}_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][1,oi].detach().cpu(), cmap='gray')
+                                        plt.imsave(f"{self.logger._save_dir}/it={it}_mask/gt_t=0_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][0,oi].detach().cpu(), cmap='gray')
+                                        plt.imsave(f"{self.logger._save_dir}/it={it}_mask/gt_t={t-1}_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][1,oi].detach().cpu(), cmap='gray')
                                 for bi in range(b):
                                     for ti in range(t):
                                         for oi in range(max_num_objects):
                                             if ti != 0:
-                                                plt.imsave(f"{self.logger.log_path}/it={it}_mask/f_t={ti}_b={bi}_oi={oi}.jpg", images['fmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
+                                                plt.imsave(f"{self.logger._save_dir}/it={it}_mask/f_t={ti}_b={bi}_oi={oi}.jpg", images['fmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
                                             if ti != t-1:
-                                                plt.imsave(f"{self.logger.log_path}/it={it}_mask/b_t={ti}_b={bi}_oi={oi}.jpg", images['bmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
-                                # except:
-                                #     pass
+                                                plt.imsave(f"{self.logger._save_dir}/it={it}_mask/b_t={ti}_b={bi}_oi={oi}.jpg", images['bmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
+                                
 
             if self._is_train:
                 if (it) % self.log_text_interval == 0 and it != 0:
-                    if self.logger is not None:
-                        self.logger.log_scalar('train/lr', self.scheduler.get_last_lr()[0], it)
-                        self.logger.log_metrics('train', 'time', (time.time()-self.last_time)/self.log_text_interval, it)
+                    
                     self.last_time = time.time()
-                    self.train_integrator.finalize('train', it)
+                    train_metrics = self.train_integrator.finalize()
+                    self.logger.write(prefix='train', train_metrics=train_metrics, **{'lr':self.scheduler.get_last_lr()[0],
+                                        'time':(time.time()-self.last_time)/self.log_text_interval})
+                    all_dicts = {**train_metrics, **{'lr':self.scheduler.get_last_lr()[0],
+                                        'time':(time.time()-self.last_time)/self.log_text_interval}}
+                    for k, v in all_dicts.items():
+                        msg = 'It {:6d} [{:5s}] [{:13}]: {:s}'.format(it, 'TRAIN', k, '{:.9s}'.format('{:0.9f}'.format(v)))
+                        self.logger.log(msg)
                     self.train_integrator.reset_except_hooks()
 
                 if it % self.save_network_interval == 0 and it != 0:

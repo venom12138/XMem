@@ -140,4 +140,7 @@ dmypy.json
 /output/
 /visuals/
 /val_data/
+/valid_data/
+/train_data/
+/EPIC_train/
 *.sh

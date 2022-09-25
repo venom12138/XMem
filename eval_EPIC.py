@@ -36,11 +36,13 @@ def colorize_mask(mask):
 Arguments loading
 """
 parser = ArgumentParser()
-parser.add_argument('--model', default='/home/venom/projects/XMem/saves/XMem.pth')
-
+parser.add_argument('--model', default='./saves/XMem.pth')
+#ATTENTION!!!!!!!!!!!!!!!!!!!!!!!!!!
+# TODO: Note this param
+parser.add_argument('--not_use_flow', action='store_true')
 # Data options
-parser.add_argument('--EPIC_path', default='./val_data')
-parser.add_argument('--yaml_path', default='./val_data/EPIC100_state_positive_val.yaml')
+parser.add_argument('--EPIC_path', default='./valid_data')
+parser.add_argument('--yaml_path', default='./valid_data/EPIC100_state_positive_val.yaml')
 parser.add_argument('--dataset', help='D16/D17/Y18/Y19/LV1/LV3/G', default='EPIC')
 parser.add_argument('--split', help='val/test', default='val')
 parser.add_argument('--output', default=None)
@@ -51,7 +53,7 @@ parser.add_argument('--benchmark', action='store_true', help='enable to disable 
         
 # Long-term memory options
 parser.add_argument('--disable_long_term', action='store_true')
-parser.add_argument('--not_use_flow', action='store_true')
+
 parser.add_argument('--max_mid_term_frames', help='T_max in paper, decrease to save memory', type=int, default=10)
 parser.add_argument('--min_mid_term_frames', help='T_min in paper, decrease to save memory', type=int, default=5)
 parser.add_argument('--max_long_term_elements', help='LT_max in paper, increase if objects disappear for a long time', 

@@ -12,23 +12,12 @@ import yaml
 class ExpHandler:
     _home = Path.home()
 
-    def __init__(self, en_wandb=False, args=None):
+    def __init__(self, en_wandb=False):
         exp_name = os.getenv('exp_name', default='default_group')
         run_name = os.getenv('run_name', default='default_name')
         self._exp_id = f'{self._get_exp_id()}_{run_name}'
         self._exp_name = exp_name
 
-        # if args.resume != '' and (Path(args.resume) / 'config.yaml').exists():
-        #     print('----------resuming-----------')
-        #     self._save_dir = Path(args.resume)
-        #     with open(self._save_dir / 'config.yaml', 'r') as f:
-        #         config = yaml.safe_load(f)
-        #     if args.strict_resume:
-        #         self.resume_sanity(args, config)
-        #     if args.en_wandb:
-        #         self.wandb_run = wandb.init(group=exp_name, name=run_name, save_code=True,
-        #                                     id=config['wandb_id'], resume='allow')
-        # else:
         self._save_dir = os.path.join('{}/.exp/{}'.format(self._home, os.getenv('WANDB_PROJECT', default='default_project')),
                                     exp_name, self._exp_id)
         if not os.path.exists(self._save_dir):
@@ -44,12 +33,12 @@ class ExpHandler:
 
 
     @staticmethod
-    def resume_sanity(args, old_conf):
+    def resume_sanity(new_conf, old_conf):
         print('-' * 10, 'Resume sanity check', '-' * 10)
         old_config_hashable = {k: tuple(v) if isinstance(v, list) else v for k, v in old_conf.items()
-                                if k not in args.resume_check_exclude_keys}
-        new_config_hashable = {k: tuple(v) if isinstance(v, list) else v for k, v in vars(args).items()
-                                if k not in args.resume_check_exclude_keys}
+                                if k not in new_conf['resume_check_exclude_keys']}
+        new_config_hashable = {k: tuple(v) if isinstance(v, list) else v for k, v in new_conf.items()
+                                if k not in new_conf['resume_check_exclude_keys']}
         print(f'Diff config: {set(old_config_hashable.items()) ^ set(new_config_hashable.items())}')
         assert old_config_hashable == new_config_hashable, 'Resume sanity check failed'
 
@@ -92,8 +81,8 @@ class ExpHandler:
         logger.addHandler(sh)
         return logger
 
-    def save_config(self, args):
-        conf = vars(args)
+    def save_config(self, conf):
+        # conf = vars(args)
         conf['exp_id'] = self._exp_id
         conf['commit'] = os.getenv('commit', default='not_set')
         conf['run_id'] = self._exp_id.split('_')[0]
