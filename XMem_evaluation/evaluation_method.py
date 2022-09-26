@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from davis2017.evaluation import DAVISEvaluation
 import yaml
-
+from utils import plot_verb_chart
 default_EPIC_path = '../val_data'
 
 time_start = time()
@@ -57,6 +57,10 @@ else:
         yaml_data = yaml.safe_load(f)
     
     seq_names = list(J['M_per_object'].keys())
+    print(J)
+    plot_verb_chart(verb_class_csv_path='./EPIC_100_verb_classes.csv', 
+                yaml_path='../val_data/EPIC100_state_positive_val.yaml', output_path=args.results_path, J_dict=J)
+    
     narrations = []
     for name in seq_names:
         name = '_'.join(name.split('_')[:-1])
@@ -66,8 +70,7 @@ else:
     J_per_object = [J['M_per_object'][x] for x in seq_names]
     F_per_object = [F['M_per_object'][x] for x in seq_names]
     table_seq = pd.DataFrame(data=list(zip(seq_names, narrations, J_per_object, F_per_object)), columns=seq_measures)
-    
-    
+
     with open(csv_name_per_sequence_path, 'w') as f:
         table_seq.to_csv(f, index=False, float_format="%.3f")
     print(f'Per-sequence results saved in {csv_name_per_sequence_path}')
