@@ -115,6 +115,10 @@ print(f'We are now starting stage EPIC')
 if config['debug']:
     config['batch_size'] = 1
     config['num_frames'] = 3
+    config['iterations'] = 5
+    config['finetune'] = 1
+    config['log_text_interval'] = config['log_image_interval'] = 1
+    config['save_network_interval'] = config['save_checkpoint_interval'] = 1
 
 """
 Model related
@@ -145,6 +149,7 @@ if config['load_network'] is not None:
     model.load_network(config['load_network'])
     config['load_network'] = None
 
+    
 """
 Dataloader related
 """

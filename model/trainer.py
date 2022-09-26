@@ -82,8 +82,9 @@ class XMemTrainer:
         self.log_image_interval = config['log_image_interval']
         self.save_network_interval = config['save_network_interval']
         self.save_checkpoint_interval = config['save_checkpoint_interval']
-        if config['debug']:
-            self.log_text_interval = self.log_image_interval = 1
+        # if config['debug']:
+        #     self.log_text_interval = self.log_image_interval = 1
+        #     self.save_network_interval = self.save_checkpoint_interval = 1
 
     def do_pass(self, data, it=0):
         
@@ -357,8 +358,9 @@ class XMemTrainer:
             return
         
         os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
-        model_path = f'{self.save_path}_{it}.pth'
+        model_path = f'{self.save_path}/network_{it}.pth'
         torch.save(self.XMem.module.state_dict(), model_path)
+        torch.save(self.XMem.module.state_dict(), f'{self.save_path}/latest_network.pth')
         print(f'Network saved to {model_path}.')
 
     def save_checkpoint(self, it):
@@ -367,7 +369,7 @@ class XMemTrainer:
             return
 
         os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
-        checkpoint_path = f'{self.save_path}_checkpoint_{it}.pth'
+        checkpoint_path = f'{self.save_path}/checkpoint_{it}.pth'
         checkpoint = { 
             'it': it,
             'network': self.XMem.module.state_dict(),

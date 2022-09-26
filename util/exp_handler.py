@@ -20,6 +20,7 @@ class ExpHandler:
 
         self._save_dir = os.path.join('{}/.exp/{}'.format(self._home, os.getenv('WANDB_PROJECT', default='default_project')),
                                     exp_name, self._exp_id)
+        
         if not os.path.exists(self._save_dir):
             os.makedirs(self._save_dir)
         if en_wandb:

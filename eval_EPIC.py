@@ -41,8 +41,8 @@ parser.add_argument('--model', default='./saves/XMem.pth')
 # TODO: Note this param
 parser.add_argument('--not_use_flow', action='store_true')
 # Data options
-parser.add_argument('--EPIC_path', default='./valid_data')
-parser.add_argument('--yaml_path', default='./valid_data/EPIC100_state_positive_val.yaml')
+parser.add_argument('--EPIC_path', default='./val_data')
+parser.add_argument('--yaml_path', default='./val_data/EPIC100_state_positive_val.yaml')
 parser.add_argument('--dataset', help='D16/D17/Y18/Y19/LV1/LV3/G', default='EPIC')
 parser.add_argument('--split', help='val/test', default='val')
 parser.add_argument('--output', default=None)
