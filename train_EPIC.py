@@ -49,8 +49,8 @@ def get_EPIC_parser():
     parser.add_argument('--lr', help='Initial learning rate', default=1e-5, type=float)
     parser.add_argument('--num_ref_frames', default=3, type=int)
     parser.add_argument('--num_frames', default=5, type=int)
-    parser.add_argument('--start_warm', default=10000, type=int)
-    parser.add_argument('--end_warm', default=35000, type=int)
+    parser.add_argument('--start_warm', default=2500, type=int)
+    parser.add_argument('--end_warm', default=15000, type=int)
 
     parser.add_argument('--gamma', help='LR := LR*gamma at every decay step', default=0.1, type=float)
     parser.add_argument('--weight_decay', default=0.05, type=float)

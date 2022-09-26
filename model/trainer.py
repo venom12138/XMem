@@ -323,13 +323,15 @@ class XMemTrainer:
                     
                     self.last_time = time.time()
                     train_metrics = self.train_integrator.finalize()
-                    self.logger.write(prefix='train', train_metrics=train_metrics, **{'lr':self.scheduler.get_last_lr()[0],
+                    if self.logger is not None:
+                        self.logger.write(prefix='train', train_metrics=train_metrics, **{'lr':self.scheduler.get_last_lr()[0],
                                         'time':(time.time()-self.last_time)/self.log_text_interval})
                     all_dicts = {**train_metrics, **{'lr':self.scheduler.get_last_lr()[0],
                                         'time':(time.time()-self.last_time)/self.log_text_interval}}
                     for k, v in all_dicts.items():
                         msg = 'It {:6d} [{:5s}] [{:13}]: {:s}'.format(it, 'TRAIN', k, '{:.9s}'.format('{:0.9f}'.format(v)))
-                        self.logger.log(msg)
+                        if self.logger is not None:
+                            self.logger.log(msg)
                     self.train_integrator.reset_except_hooks()
 
                 if it % self.save_network_interval == 0 and it != 0:
