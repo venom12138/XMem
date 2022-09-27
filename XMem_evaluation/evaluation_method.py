@@ -29,7 +29,10 @@ csv_name_per_sequence = f'per-sequence_results-{args.set}.csv'
 
 # Check if the method has been evaluated before, if so read the results, otherwise compute the results
 csv_name_global_path = os.path.join(args.results_path, csv_name_global)
+
 csv_name_per_sequence_path = os.path.join(args.results_path, csv_name_per_sequence)
+# csv_name_per_sequence_path = '/home/venom/projects/XMem/output/shit'
+# csv_name_global_path = '/home/venom/projects/XMem/output/shit/global.csv'
 if os.path.exists(csv_name_global_path) and os.path.exists(csv_name_per_sequence_path):
     print('Using precomputed results...')
     table_g = pd.read_csv(csv_name_global_path)
@@ -57,7 +60,7 @@ else:
         yaml_data = yaml.safe_load(f)
     
     seq_names = list(J['M_per_object'].keys())
-    print(J)
+    print
     plot_verb_chart(verb_class_csv_path='./EPIC_100_verb_classes.csv', 
                 yaml_path='../val_data/EPIC100_state_positive_val.yaml', output_path=args.results_path, J_dict=J)
     

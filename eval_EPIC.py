@@ -90,7 +90,7 @@ if use_flow == False:
     print('not use flow !!!!!!!!!!!')
 
 dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
-val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=2)
+val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
 torch.autograd.set_grad_enabled(False)
 
 # Load our checkpoint
@@ -124,6 +124,10 @@ for data in tqdm(val_loader):
 
     for ti in (range(vid_length)):
         with torch.cuda.amp.autocast(enabled=not args.benchmark):
+            
+            whether_to_save_mask = int(data['whether_save_mask'][0][ti].cpu())
+            
+                    
             rgb = data['rgb'][0][ti].cuda() # 3*H*W
             flow = data['flow'][0][ti].cuda() # 2*H*W
             if ti == 0:
@@ -132,10 +136,13 @@ for data in tqdm(val_loader):
                 processor.set_all_labels(range(1, num_objects+1))
             else:
                 msk = None
+            
             frame = data['info']['frames'][ti][0]
             shape = dataset.img_size # H*W
-            whether_to_save_mask = int(data['whether_save_mask'][0][ti].cpu())
+            
             need_resize = True
+            raw_rgb_path = data['info']['rgb_dir'][0] + '/' + frame
+            raw_frame = np.array(Image.open(raw_rgb_path))
             
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
@@ -177,7 +184,7 @@ for data in tqdm(val_loader):
             # Upsample to original size if needed
             if need_resize:
                 prob = F.interpolate(prob.unsqueeze(1), shape, mode='bilinear', align_corners=False)[:,0]
-
+                
             end.record()
             torch.cuda.synchronize()
             total_process_time += (start.elapsed_time(end)/1000)
@@ -203,20 +210,21 @@ for data in tqdm(val_loader):
                 video_part = '_'.join(vid_name.split('_')[:2])
                 this_out_path = path.join(out_path, partition, video_part, vid_name)
                 os.makedirs(this_out_path, exist_ok=True)
+                
+                visualization = overlay_davis(raw_frame, out_mask)
+                visual_outpath = path.join(out_path, 'draw', partition, video_part, vid_name)
+                if not os.path.isdir(visual_outpath):
+                    os.makedirs(visual_outpath)
+                plt.imsave(os.path.join(visual_outpath, frame), visualization)
+                
                 out_mask = colorize_mask(out_mask)
                 out_mask.save(os.path.join(this_out_path, frame.replace('jpg','png')))
+
                 # out_mask = mapper.remap_index_mask(out_mask)
                 # out_img = Image.fromarray(out_mask)
                 # plt.imsave(os.path.join(this_out_path, frame.replace('jpg','png')), out_mask*255, cmap='gray')
                 # out_img.save(os.path.join(this_out_path, frame))
 
-            # if args.save_scores:
-            #     np_path = path.join(args.output, 'Scores', vid_name)
-            #     os.makedirs(np_path, exist_ok=True)
-            #     if ti==len(loader)-1:
-            #         hkl.dump(mapper.remappings, path.join(np_path, f'backward.hkl'), mode='w')
-            #     if args.save_all or info['save'][0]:
-            #         hkl.dump(prob, path.join(np_path, f'{frame[:-4]}.hkl'), mode='w', compression='lzf')
 
 
 print(f'Total processing time: {total_process_time}')

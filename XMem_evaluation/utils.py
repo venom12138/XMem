@@ -26,7 +26,7 @@ def plot_verb_chart(verb_class_csv_path, yaml_path, output_path=None, J_dict=Non
         J_list.append(J)
         cnt_list.append(eff_verb_J[k]['count'])
     
-    fig, ax1 = plt.subplots(figsize=(20,15))
+    fig, ax1 = plt.subplots(figsize=(30,15))
     plt.xticks(fontsize=20)
     plt.yticks(fontsize=20)
     

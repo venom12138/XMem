@@ -66,6 +66,7 @@ class EPICtestDataset(Dataset):
         info['name'] = self.vids[idx]
         info['frames'] = []
         vid_im_path = path.join(self.data_root, video_value['participant_id'], 'rgb_frames', video_value['video_id'], self.vids[idx])
+        info['rgb_dir'] = vid_im_path
         # first last frame
         vid_gt_path = path.join(self.data_root, video_value['participant_id'], 'anno_masks', video_value['video_id'], self.vids[idx])
         vid_flow_path = path.join(self.data_root, video_value['participant_id'], 'flow_frames', video_value['video_id'], self.vids[idx])
@@ -81,9 +82,14 @@ class EPICtestDataset(Dataset):
         for f_idx in range(len(frames)):
             jpg_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
             png_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.png'
+            #TODO
             if not os.path.isfile(path.join(vid_gt_path, png_name)):
-                if f_idx % 2 == 0:
-                    continue
+                if len(frames) > 1000:
+                    if f_idx % 6 != 0:
+                        continue
+                else:
+                    if f_idx % 2 == 0:
+                        continue
                     # pass
             if len(video_value['video_id'].split('_')[-1]) == 2:
                 flow_name = 'frame_' + str(int(np.ceil((float(frames[f_idx]) - 3) / 2))).zfill(10)+ '.jpg'
