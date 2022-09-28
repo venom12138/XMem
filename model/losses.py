@@ -18,6 +18,24 @@ def dice_loss(input_mask, cls_gt): # cls_gt is B x H x W
         losses.append(loss)
     return torch.cat(losses).mean()
 
+def dice_loss_between_mask(mask1, mask2): # mask：B x (maxobj+1) x H x W
+    num_classes = mask1.shape[1]
+    mask1 = torch.argmax(mask1, dim=1)
+    mask2 = torch.argmax(mask2, dim=1)
+    
+    mask1 = F.one_hot(mask1, num_classes=num_classes).permute(0, 3, 1, 2).float()
+    mask2 = F.one_hot(mask2, num_classes=num_classes).permute(0, 3, 1, 2).float()
+    
+    mask1 = mask1.flatten(start_dim=2) # B x (maxobj+1) x HW
+    mask2 = mask2.flatten(start_dim=2) # B x (maxobj+1) x HW
+
+    numerator = 2 * (mask1 * mask2).sum(-1)
+    
+    denominator = mask1.sum(-1) + mask2.sum(-1)
+    
+    loss = 1 - (numerator + 1) / (denominator + 1)
+    
+    return loss.mean()
 
 # https://stackoverflow.com/questions/63735255/how-do-i-compute-bootstrapped-cross-entropy-loss-in-pytorch
 class BootstrappedCE(nn.Module):
