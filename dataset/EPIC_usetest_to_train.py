@@ -91,8 +91,8 @@ class EPICTestToTrainDataset(Dataset):
         vid_flow_path = path.join(self.data_root, video_value['participant_id'], 'flow_frames', video_value['video_id'], self.vids[idx])
         gt_frames = sorted(glob(f"{vid_gt_path}/*.png"))
         start_frame = int(gt_frames[0].split('/')[-1].split('.')[0][6:])
-        stop_frame = int(gt_frames[-1].split('/')[-1].split('.')[0][6:])
-        frames = list(range(video_value['start_frame'], video_value['stop_frame']))
+        stop_frame = int(gt_frames[-1].split('/')[-1].split('.')[0][6:])+1
+        frames = list(range(start_frame, stop_frame))
 
         trials = 0
         while trials < 5:

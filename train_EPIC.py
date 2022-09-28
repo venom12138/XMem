@@ -13,7 +13,7 @@ from model.trainer import XMemTrainer
 # from dataset.static_dataset import StaticTransformDataset
 # from dataset.vos_dataset import VOSDataset
 from dataset.EPIC_dataset import EPICDataset
-
+from dataset.EPIC_usetest_to_train import EPICTestToTrainDataset
 from util.logger import TensorboardLogger
 from util.configuration import Configuration
 from util.load_subset import load_sub_davis, load_sub_yv
@@ -115,7 +115,7 @@ print(f'We are now starting stage EPIC')
 if config['debug']:
     config['batch_size'] = 1
     config['num_frames'] = 3
-    config['iterations'] = 5
+    config['iterations'] = 140
     config['finetune'] = 1
     config['log_text_interval'] = config['log_image_interval'] = 1
     config['save_network_interval'] = config['save_checkpoint_interval'] = 1
@@ -167,8 +167,9 @@ def construct_loader(dataset):
 
 # BL 30K数据集
 def renew_epic_loader(max_skip, finetune=False):
-    train_dataset = EPICDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
-
+    #TODO for debug
+    # train_dataset = EPICDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
+    train_dataset = EPICTestToTrainDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
     print(f'EPIC dataset size: {len(train_dataset)}')
     print(f'Renewed with max_skip = {max_skip}')
 
