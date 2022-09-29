@@ -45,8 +45,8 @@ config = {
     'max_long_term_elements': 10000,
 }
 
-ROOT_PATH = '/home/venom/data/EPIC_train_split'
-vid = 'P04_01_160'
+ROOT_PATH = '/home/venom/projects/XMem/val_data'
+vid = 'P02_12_33'
 use_flow = True 
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
@@ -78,7 +78,7 @@ if not os.path.isdir(draw_save_path):
 mask = np.array(Image.open(mask_name).convert('1'),dtype=np.int32)
 print(np.unique(mask))
 print(mask.shape)
-num_objects = len(np.unique(np.round(mask))) - 1
+num_objects = len(np.unique(np.round(mask))) - 1 # objects的数量
 
 """# Propagte frame-by-frame"""
 
@@ -136,7 +136,8 @@ with torch.cuda.amp.autocast(enabled=True):
                 prediction = processor.step(frame_torch, flow_torch)
             else:
                 prediction = processor.step(frame_torch)
-
+        # print(prediction.shape)
+        # dd
         # argmax, convert to numpy
         # 0,1
         prediction = torch_prob_to_numpy_mask(prediction)

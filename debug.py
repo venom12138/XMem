@@ -43,4 +43,12 @@ import torch
 # print(kl_result)
 # print(F.kl_div(torch.tensor(log_q), torch.tensor(p), reduction='none'))
 # os.makedirs('/home/venom/projects/XMem/wandb', exist_ok=True)
-os.system(f'setx debug qnmlgcb')
+# os.system(f'setx debug qnmlgcb')
+
+x = torch.tensor([[[0,1,2],
+                   [2,1,2]],
+                  [[0,1,2],
+                  [2,1,2]]], dtype=torch.long)
+print(F.one_hot(x, num_classes=3).permute(0,3,1,2))
+print(F.one_hot(x, num_classes=3).shape)
+# print(x.shape)

@@ -76,6 +76,8 @@ class InferenceCore:
             
             hidden, _, pred_prob_with_bg = self.network.segment(multi_scale_features, memory_readout, 
                                     self.memory.get_hidden(), h_out=is_normal_update, strip_bg=False)
+            # print(pred_prob_with_bg[0,:,0,0])
+            # dd
             # remove batch dim
             pred_prob_with_bg = pred_prob_with_bg[0]
             pred_prob_no_bg = pred_prob_with_bg[1:]

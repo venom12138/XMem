@@ -18,16 +18,14 @@ def dice_loss(input_mask, cls_gt): # cls_gt is B x H x W
         losses.append(loss)
     return torch.cat(losses).mean()
 
-def dice_loss_between_mask(mask1, mask2): # mask：B x (maxobj+1) x H x W
+def dice_loss_between_mask(mask1, mask2): # mask：B x maxobj x H x W
     num_classes = mask1.shape[1]
-    mask1 = torch.argmax(mask1, dim=1)
-    mask2 = torch.argmax(mask2, dim=1)
     
     mask1 = F.one_hot(mask1, num_classes=num_classes).permute(0, 3, 1, 2).float()
     mask2 = F.one_hot(mask2, num_classes=num_classes).permute(0, 3, 1, 2).float()
     
-    mask1 = mask1.flatten(start_dim=2) # B x (maxobj+1) x HW
-    mask2 = mask2.flatten(start_dim=2) # B x (maxobj+1) x HW
+    mask1 = mask1.flatten(start_dim=2) # B x (maxobj) x HW
+    mask2 = mask2.flatten(start_dim=2) # B x (maxobj) x HW
 
     numerator = 2 * (mask1 * mask2).sum(-1)
     
