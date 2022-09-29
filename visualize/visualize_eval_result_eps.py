@@ -2,7 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-run_dir = '/home/venom/.exp/0925_state_change_segm/0925_nf=3_bs=6/Y0016_lr=1e-5d'
+run_dir = '/u/ryanxli/.exp/0925_state_change_segm/0925_nf=8_bs=8/D0002_lr=1e-5,start_warm=2500,end_warm=15000'
 JF_list = []
 iters = []
 for dir_name in os.listdir(run_dir):
@@ -17,8 +17,9 @@ for dir_name in os.listdir(run_dir):
     JF_list.append(df['J&F-Mean'][0])
     
 idx = np.argsort(iters)
-iters = iters[idx]
-JF_list = JF_list[idx]
+print(idx)
+iters = np.array(iters)[idx]
+JF_list = np.array(JF_list)[idx]
 plt.plot(iters, JF_list, label='J&F-Mean')
 exp_name = run_dir.split('/')[-2] + '--' + run_dir.split('/')[-1]
 plt.title(exp_name)
