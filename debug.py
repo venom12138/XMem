@@ -10,6 +10,7 @@ import seaborn
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+import wandb
 # img = cv2.imread('/cluster/home2/yjw/venom/XMem/data/P01/myflow_frames/P01_01/37/u/frame_0000007029.jpg')
 
 # img0 = np.array(cv2.imread('/cluster/home2/yjw/venom/XMem/data/P01/positive_frames/P01_01/37/frame_0000007034.jpg'), dtype =np.int32)
@@ -45,10 +46,27 @@ import torch
 # os.makedirs('/home/venom/projects/XMem/wandb', exist_ok=True)
 # os.system(f'setx debug qnmlgcb')
 
-x = torch.tensor([[[0,1,2],
-                   [2,1,2]],
-                  [[0,1,2],
-                  [2,1,2]]], dtype=torch.long)
-print(F.one_hot(x, num_classes=3).permute(0,3,1,2))
-print(F.one_hot(x, num_classes=3).shape)
+# x = torch.tensor([[[0,1,2],
+#                    [2,1,2]],
+#                   [[0,1,2],
+#                   [2,1,2]]], dtype=torch.long)
+# print(F.one_hot(x, num_classes=3).permute(0,3,1,2))
+# print(F.one_hot(x, num_classes=3).shape)
 # print(x.shape)
+# print(os.getcwd())
+# os.chdir('./XMem_evaluation')
+# print(os.getcwd())
+
+wandb.init(project='0925_state_change_segm', group='debug', name='0930_debug_step')
+test_step = wandb.define_metric('test_step')
+wandb.define_metric(name='eval_acc', step_metric=test_step)
+for i in range(10):
+    wandb.log({'loss': i})
+for i in range(10):
+    wandb.log({'eval_loss': i})
+    
+for i in range(10):
+    wandb.log({'test_step': i*10, 'eval_acc': i})
+    # wandb.log({})
+    # test_step += 1
+wandb.finish()

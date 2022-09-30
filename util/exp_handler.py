@@ -24,14 +24,18 @@ class ExpHandler:
         if not os.path.exists(self._save_dir):
             os.makedirs(self._save_dir)
         if en_wandb:
-            self.wandb_run = wandb.init(group=exp_name, name=run_name,settings=wandb.Settings(start_method="fork"))
-
+            self.wandb_run = wandb.init(group=exp_name, name=run_name, settings=wandb.Settings(start_method="fork"), save_code=True)
+            test_step = wandb.define_metric('test_step')
+            wandb.define_metric(name='eval/eval_acc', step_metric=test_step)
         sym_dest = self._get_sym_path('N')
         os.symlink(self._save_dir, sym_dest)
 
         self._logger = self._init_logger()
         self._en_wandb = en_wandb
 
+    def log_eval_acc(self, acc, step):
+        if self._en_wandb:
+            wandb.log({'test_step': step, 'eval/eval_acc': acc})
 
     @staticmethod
     def resume_sanity(new_conf, old_conf):

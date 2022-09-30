@@ -19,6 +19,9 @@ from util.configuration import Configuration
 from util.load_subset import load_sub_davis, load_sub_yv
 from argparse import ArgumentParser
 from util.exp_handler import *
+import pathlib
+from visualize.visualize_eval_result_eps import visualize_eval_result
+import wandb
 
 def get_EPIC_parser():
     parser = ArgumentParser()
@@ -115,10 +118,10 @@ print(f'We are now starting stage EPIC')
 if config['debug']:
     config['batch_size'] = 1
     config['num_frames'] = 3
-    config['iterations'] = 140
-    config['finetune'] = 1
+    config['iterations'] = 3
+    config['finetune'] = 0
     config['log_text_interval'] = config['log_image_interval'] = 1
-    config['save_network_interval'] = config['save_checkpoint_interval'] = 1
+    config['save_network_interval'] = config['save_checkpoint_interval'] = 2
 
 """
 Model related
@@ -127,13 +130,14 @@ if local_rank == 0:
     # exp_handler
     exp = ExpHandler(en_wandb=config['en_wandb'])
     exp.save_config(config)
-
+    wandb.define_metric('eval_step')
     # Construct the rank 0 model
     model = XMemTrainer(config, logger=exp, 
                     save_path=exp._save_dir, 
                     local_rank=local_rank, world_size=world_size).train()
 else:
     # Construct model for other ranks
+    exp = None
     model = XMemTrainer(config, local_rank=local_rank, world_size=world_size).train()
 
 # Load pertrained model if needed
@@ -250,10 +254,36 @@ try:
             if total_iter >= config['iterations'] + config['finetune']:
                 break
 finally:
-    if not config['debug'] and model.logger is not None and total_iter>5000:
+    # not config['debug'] and total_iter>5000
+    if model.logger is not None:
         model.save_network(total_iter)
         model.save_checkpoint(total_iter)
-
+        
+if local_rank == 0 and exp is not None:
+    eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
+    eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
+    if total_iter != eval_iters[-1]:
+        eval_iters.append(total_iter)
+        
+    for iteration in eval_iters:
+        exp_name = os.getenv('exp_name', default='default_group')
+        home = pathlib.Path.home()
+        wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
+        model_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/network_{iteration}.pth'
+        if not os.path.exists(model_path):
+            print(f'Model not found: {model_path}')
+            continue
+        output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
+        os.makedirs(output_path, exist_ok=True)
+        os.system(f'python eval_EPIC.py --model {model_path} --output {output_path}')
+        os.chdir('./XMem_evaluation')
+        os.system(f'python evaluation_method.py --results_path {output_path}')
+        os.chdir('..')
+    run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
+    iters, JF_list = visualize_eval_result(run_dir)
+    for i in range(len(iters)):
+        exp.log_eval_acc(JF_list[i], iters[i])
+    # exp.write
 # network_in_memory = model.XMem.module.state_dict()
 
 distributed.destroy_process_group()
