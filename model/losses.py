@@ -19,30 +19,16 @@ def dice_loss(input_mask, cls_gt): # cls_gt is B x H x W
     return torch.cat(losses).mean()
 
 # dicrete dice loss # take in logits
-# def dice_loss_between_mask(mask1, mask2): # mask：B x (maxobj+1) x H x W
-#     num_classes = mask1.shape[1]
-#     mask1 = torch.argmax(mask1, dim=1)
-#     mask2 = torch.argmax(mask2, dim=1)
+def dice_loss_between_mask(mask1, mask2): # mask：B x (maxobj+1) x H x W
+    num_classes = mask1.shape[1]
+    mask1 = torch.argmax(mask1, dim=1)
+    mask2 = torch.argmax(mask2, dim=1)
     
-#     mask1 = F.one_hot(mask1, num_classes=num_classes).permute(0, 3, 1, 2).float()
-#     mask2 = F.one_hot(mask2, num_classes=num_classes).permute(0, 3, 1, 2).float()
+    mask1 = F.one_hot(mask1, num_classes=num_classes).permute(0, 3, 1, 2).float()
+    mask2 = F.one_hot(mask2, num_classes=num_classes).permute(0, 3, 1, 2).float()
     
-#     mask1 = mask1.flatten(start_dim=2) # B x (maxobj+1) x HW
-#     mask2 = mask2.flatten(start_dim=2) # B x (maxobj+1) x HW
-
-#     numerator = 2 * (mask1 * mask2).sum(-1)
-    
-#     denominator = mask1.sum(-1) + mask2.sum(-1)
-    
-#     loss = 1 - (numerator + 1) / (denominator + 1)
-    
-#     return loss.mean()
-
-#continual dice loss take in mask
-def dice_loss_between_mask(mask1, mask2): # mask：B x maxobj x H x W
-    
-    mask1 = mask1.flatten(start_dim=2) # B x (maxobj) x HW
-    mask2 = mask2.flatten(start_dim=2) # B x (maxobj) x HW
+    mask1 = mask1.flatten(start_dim=2) # B x (maxobj+1) x HW
+    mask2 = mask2.flatten(start_dim=2) # B x (maxobj+1) x HW
 
     numerator = 2 * (mask1 * mask2).sum(-1)
     
@@ -51,6 +37,20 @@ def dice_loss_between_mask(mask1, mask2): # mask：B x maxobj x H x W
     loss = 1 - (numerator + 1) / (denominator + 1)
     
     return loss.mean()
+
+#continual dice loss take in mask
+# def dice_loss_between_mask(mask1, mask2): # mask：B x maxobj x H x W
+    
+#     mask1 = mask1.flatten(start_dim=2) # B x (maxobj) x HW
+#     mask2 = mask2.flatten(start_dim=2) # B x (maxobj) x HW
+
+#     numerator = 2 * (mask1 * mask2).sum(-1)
+    
+#     denominator = mask1.sum(-1) + mask2.sum(-1)
+    
+#     loss = 1 - (numerator + 1) / (denominator + 1)
+    
+#     return loss.mean()
 
 # https://stackoverflow.com/questions/63735255/how-do-i-compute-bootstrapped-cross-entropy-loss-in-pytorch
 class BootstrappedCE(nn.Module):
@@ -124,17 +124,20 @@ class LossComputer:
             for bi in range(b):
                 if ti == t-1:
                     loss, p = self.bce(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,1,0], it)
+                    losses['p'] += p / b / 2 # (t-1)
+                    losses[f'ce_loss_{ti}'] += loss / b
                 elif ti == 0:
                     loss, p = self.bce(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,0,0], it)
-                else:
-                    if it%2 == 0:
-                        loss, p = self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
-                        loss = loss * weight
-                    else:
-                        loss, p = self.bkl(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it)
-                        loss = loss * (1-weight+self.end_w)
-                losses['p'] += p / b / (t-1)
-                losses[f'ce_loss_{ti}'] += loss / b
+                    losses['p'] += p / b / 2 # (t-1)
+                    losses[f'ce_loss_{ti}'] += loss / b
+                # else:
+                #     if it%2 == 0:
+                #         loss, p = self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
+                #         loss = loss * weight
+                #     else:
+                #         loss, p = self.bkl(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it)
+                #         loss = loss * (1-weight+self.end_w)
+                
 
             losses['total_loss'] += losses['ce_loss_%d'%ti]
             # TODO: 中间帧做dice loss
@@ -144,8 +147,8 @@ class LossComputer:
             elif ti == t - 1:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data['cls_gt'][:,1,0]) # dice loss评估相似性 X交Y/X+Y
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
-            # else:
-            #     losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data[f'bmasks_{ti}'])
-            #     losses['total_loss'] += losses[f'dice_loss_{ti}']
+            else:
+                losses[f'dice_loss_{ti}'] = dice_loss(data[f'flogits_{ti}'], data[f'blogits_{ti}'])
+                losses['total_loss'] += losses[f'dice_loss_{ti}']
 
         return losses
