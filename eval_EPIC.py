@@ -66,6 +66,7 @@ parser.add_argument('--deep_update_every', help='Leave -1 normally to synchroniz
 
 # Multi-scale options
 parser.add_argument('--save_scores', action='store_true')
+parser.add_argument('--only_test_second_half', action='store_true')
 
 args = parser.parse_args()
 
@@ -121,12 +122,20 @@ for data in tqdm(val_loader):
     # mapper = MaskMapper()
     processor = InferenceCore(network, config=config)
     first_mask_loaded = False
+    if config['only_test_second_half']:
+        all_masks = data['whether_save_mask'][0][:].cpu().sum().item()
+        second_half_start = all_masks // 2
+        masks_to_now = 0
 
     for ti in (range(vid_length)):
         with torch.cuda.amp.autocast(enabled=not args.benchmark):
             
             whether_to_save_mask = int(data['whether_save_mask'][0][ti].cpu())
-            
+            if config['only_test_second_half']:
+                if whether_to_save_mask:
+                    masks_to_now += 1
+                    if masks_to_now <= second_half_start:
+                        whether_to_save_mask = 0
                     
             rgb = data['rgb'][0][ti].cuda() # 3*H*W
             flow = data['flow'][0][ti].cuda() # 2*H*W

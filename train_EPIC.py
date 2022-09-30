@@ -75,6 +75,7 @@ def get_EPIC_parser():
     # # Multiprocessing parameters, not set by users
     parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
     parser.add_argument('--en_wandb', action='store_true')
+    parser.add_argument('--only_test_second_half', action='store_true')
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': not args.no_flow}}
 
@@ -275,7 +276,10 @@ if local_rank == 0 and exp is not None:
             continue
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
-        os.system(f'python eval_EPIC.py --model {model_path} --output {output_path}')
+        if config['only_test_second_half']:
+            os.system(f'python eval_EPIC.py --model {model_path} --output {output_path} --only_test_second_half')
+        else:
+            os.system(f'python eval_EPIC.py --model {model_path} --output {output_path}')
         os.chdir('./XMem_evaluation')
         os.system(f'python evaluation_method.py --results_path {output_path}')
         os.chdir('..')
