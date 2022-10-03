@@ -65,7 +65,7 @@ def get_EPIC_parser():
     # Logging information
     parser.add_argument('--log_text_interval', default=100, type=int)
     parser.add_argument('--log_image_interval', default=2500, type=int)
-    parser.add_argument('--save_network_interval', default=5000, type=int)
+    parser.add_argument('--save_network_interval', default=500, type=int)
     parser.add_argument('--save_checkpoint_interval', default=15000, type=int)
 
     parser.add_argument('--debug', help='Debug mode which logs information more often', action='store_true')

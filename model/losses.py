@@ -148,7 +148,7 @@ class LossComputer:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data['cls_gt'][:,1,0]) # dice loss评估相似性 X交Y/X+Y
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
             else:
-                losses[f'dice_loss_{ti}'] = dice_loss(data[f'flogits_{ti}'], data[f'blogits_{ti}'])
+                losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'flogits_{ti}'], data[f'blogits_{ti}'])
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
 
         return losses
