@@ -83,6 +83,13 @@ if args.output is None:
 Data preparation
 """
 out_path = args.output
+
+if os.path.exists(f'{out_path}/global_results-val.csv'):
+    os.remove(f'{out_path}/global_results-val.csv')
+
+if os.path.exists(f'{out_path}/per-sequence_results-val.csv'):
+    os.remove(f'{out_path}/per-sequence_results-val.csv')
+
 print(out_path)
 use_flow = not args.not_use_flow
 if 'noflow' in args.model:

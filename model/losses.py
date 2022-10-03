@@ -24,23 +24,23 @@ def dice_loss(input_mask, cls_gt): # cls_gt is B x H x W
 def dice_loss_between_mask(mask1, tgt_mask): 
     num_classes = mask1.shape[1]
     tgt_mask = torch.argmax(tgt_mask, dim=1)
-    print(f'tgt_mask:{tgt_mask.shape}')
+    # print(f'tgt_mask:{tgt_mask.shape}')
     tgt_mask = F.one_hot(tgt_mask, num_classes=num_classes+1).permute(0, 3, 1, 2).float()
-    print(f'tgt_mask:{tgt_mask.shape}')
+    # print(f'tgt_mask:{tgt_mask.shape}')
     mask1 = mask1.flatten(start_dim=2) # B x maxobj x HW
     tgt_mask = tgt_mask.flatten(start_dim=2) # B x (maxobj+1) x HW
     tgt_mask = tgt_mask[:,1:,:] # B x maxobj x HW
-    print(f'tgt_mask:{tgt_mask.shape}')
+    # print(f'tgt_mask:{tgt_mask.shape}')
     
     numerator = 2 * (mask1 * tgt_mask).sum(-1)
-    print(f'mask1 * tgt_mask:{(mask1 * tgt_mask).shape}')
-    print(f'numerator:{numerator}')
+    # print(f'mask1 * tgt_mask:{(mask1 * tgt_mask).shape}')
+    # print(f'numerator:{numerator}')
     
     denominator = mask1.sum(-1) + tgt_mask.sum(-1)
-    print(f'denominator:{denominator}')
+    # print(f'denominator:{denominator}')
     loss = 1 - (numerator + 1) / (denominator + 1)
-    print(loss)
-    dd
+    # print(loss)
+    # dd
     return loss.mean()
 
 #continual dice loss take in mask
@@ -112,7 +112,8 @@ class LossComputer:
         super().__init__()
         self.config = config
         self.bce = BootstrappedCE(config['start_warm'], config['end_warm'])
-        self.bkl = BootstrappedKL(config['start_warm'], config['end_warm'])
+        # self.bkl = BootstrappedKL(config['start_warm'], config['end_warm'])
+        
         self.start_w = 1
         self.end_w = 0.0
 
@@ -154,10 +155,11 @@ class LossComputer:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data['cls_gt'][:,1,0]) # dice loss评估相似性 X交Y/X+Y
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
             else:
-                if np.random.rand() < weight:
-                    losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'fmasks_{ti}'], data[f'blogits_{ti}'].detach())
-                else:
-                    losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f'flogits_{ti}'].detach())
-                losses['total_loss'] += losses[f'dice_loss_{ti}']
+                if self.config['use_dice_align']:
+                    if np.random.rand() < weight:
+                        losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'fmasks_{ti}'], data[f'blogits_{ti}'].detach())
+                    else:
+                        losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f'flogits_{ti}'].detach())
+                    losses['total_loss'] += losses[f'dice_loss_{ti}']
 
         return losses
