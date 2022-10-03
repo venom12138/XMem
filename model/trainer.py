@@ -182,6 +182,7 @@ class XMemTrainer:
                 # logits:B,max_obj_num+1,H,W; 
                 # masks:B,max_obj_num,H,W
                 # hidden:B,max_obj_num,hidden_dim,H//16,W//16
+                # logits是没有softmax过的， mask是softmax过后，去掉bg的
                 hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), 
                                                 memory_readout, hidden, selector, (ti < (self.num_frames-1))) 
 
