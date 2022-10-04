@@ -73,7 +73,10 @@ class XMemTrainer:
 
         self.optimizer = optim.AdamW(filter(
             lambda p: p.requires_grad, self.XMem.parameters()), lr=config['lr'], weight_decay=config['weight_decay'])
-        self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, config['steps'], config['gamma'])
+        if config['cos_lr']:
+            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, config['iterations']+config['finetune'])
+        else:
+            self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, config['steps'], config['gamma'])
         if config['amp']:
             self.scaler = torch.cuda.amp.GradScaler()
 
@@ -339,9 +342,9 @@ class XMemTrainer:
                     if self.logger is not None:
                         self.save_network(it)
 
-                if it % self.save_checkpoint_interval == 0 and it != 0:
-                    if self.logger is not None:
-                        self.save_checkpoint(it)
+                # if it % self.save_checkpoint_interval == 0 and it != 0:
+                #     if self.logger is not None:
+                #         self.save_checkpoint(it)
         
         # Backward pass
         self.optimizer.zero_grad(set_to_none=True)

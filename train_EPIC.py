@@ -76,6 +76,7 @@ def get_EPIC_parser():
     parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
     parser.add_argument('--en_wandb', action='store_true')
     parser.add_argument('--use_dice_align', action='store_true')
+    parser.add_argument('--cos_lr', action='store_true')
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': not args.no_flow}}
 
@@ -280,6 +281,9 @@ if local_rank == 0 and exp is not None:
         os.chdir('./XMem_evaluation')
         os.system(f'python evaluation_method.py --results_path {output_path}')
         os.chdir('..')
+        os.system(f"zip -qru {output_path}/masks.zip {output_path}/")
+        os.system(f"rm -r {output_path}/P*")
+        os.system(f"rm -r {output_path}/draw")
     run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
     iters, JF_list = visualize_eval_result(run_dir)
     for i in range(len(iters)):
