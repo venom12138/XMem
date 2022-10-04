@@ -78,6 +78,8 @@ def get_EPIC_parser():
     parser.add_argument('--use_dice_align', action='store_true')
     parser.add_argument('--cos_lr', action='store_true')
     parser.add_argument('--only_eval', action='store_true')
+    parser.add_argument('--resume', default='', type=str,
+                    help='path to latest checkpoint (default: none)')
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': not args.no_flow}}
 
@@ -132,7 +134,7 @@ Model related
 """
 if local_rank == 0:    
     # exp_handler
-    exp = ExpHandler(en_wandb=config['en_wandb'])
+    exp = ExpHandler(en_wandb=config['en_wandb'], resume=config['resume'])
     exp.save_config(config)
     wandb.define_metric('eval_step')
     # Construct the rank 0 model
