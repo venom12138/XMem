@@ -278,13 +278,13 @@ if local_rank == 0 and exp is not None:
             continue
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
-        os.system(f'python eval_EPIC.py --model {model_path} --output {output_path}')
+        os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}"')
         os.chdir('./XMem_evaluation')
-        os.system(f'python evaluation_method.py --results_path {output_path}')
+        os.system(f'python evaluation_method.py --results_path "{output_path}"')
         os.chdir('..')
-        os.system(f"zip -qru {output_path}/masks.zip {output_path}/")
-        os.system(f"rm -r {output_path}/P*")
-        os.system(f"rm -r {output_path}/draw")
+        os.system(f'zip -qru "{output_path}/masks.zip" "{output_path}/"')
+        os.system(f'rm -r "{output_path}/P*"')
+        os.system(f'rm -r "{output_path}/draw"')
     run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
     iters, JF_list = visualize_eval_result(run_dir)
     for i in range(len(iters)):
