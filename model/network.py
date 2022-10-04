@@ -16,6 +16,7 @@ from model.memory_util import *
 # from modules import *
 # from memory_util import *
 from torchsummary import summary
+import clip
 class XMem(nn.Module):
     def __init__(self, config, model_path=None, map_location=None):
         """
@@ -32,6 +33,14 @@ class XMem(nn.Module):
         self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)
         self.flow_encoder = FlowEncoder()
         self.flow_value_fuser = FlowValueFuser(self.value_dim, 256, self.value_dim)
+        # clip model
+        clip_model,_ = clip.load("ViT-L/14@336px")
+        self.token_embedding = clip_model.token_embedding
+        self.positional_embedding = clip_model.positional_embedding
+        self.transformer = clip_model.transformer
+        self.ln_final= clip_model.ln_final
+        self.text_projection = clip_model.text_projection
+        del clip_model
         # Projection from f16 feature space to key/value space
         # indim:1024,即f16；outdim:key_dim
         self.key_proj = KeyProjection(1024, self.key_dim)

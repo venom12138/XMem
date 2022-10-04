@@ -77,6 +77,7 @@ def get_EPIC_parser():
     parser.add_argument('--en_wandb', action='store_true')
     parser.add_argument('--use_dice_align', action='store_true')
     parser.add_argument('--cos_lr', action='store_true')
+    parser.add_argument('--only_eval', action='store_true')
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': not args.no_flow}}
 
@@ -220,47 +221,48 @@ Starts training
 finetuning = False
 # Need this to select random bases in different workers
 np.random.seed(np.random.randint(2**30-1) + local_rank*100)
-try:
-    while total_iter < config['iterations'] + config['finetune']:
-        
-        # Crucial for randomness! 
-        train_sampler.set_epoch(current_epoch)
-        current_epoch += 1
-        print(f'Current epoch: {current_epoch}')
+if not config["only_eval"]:
+    try:
+        while total_iter < config['iterations'] + config['finetune']:
+            
+            # Crucial for randomness! 
+            train_sampler.set_epoch(current_epoch)
+            current_epoch += 1
+            print(f'Current epoch: {current_epoch}')
 
-        # Train loop
-        model.train()
-        for data in train_loader:
-            # Update skip if needed
-            # 达到change skip iter之后，更新skip，右移change_skip_iter，并重新获取数据集
-            # skip是每次跳过多少帧
-            if total_iter >= change_skip_iter[0]:
-                while total_iter >= change_skip_iter[0]:
-                    cur_skip = max_skip_values[0]
-                    max_skip_values = max_skip_values[1:]
-                    change_skip_iter = change_skip_iter[1:]
-                print(f'Changing skip to {cur_skip=}')
-                train_sampler, train_loader = renew_loader(cur_skip)
-                break
+            # Train loop
+            model.train()
+            for data in train_loader:
+                # Update skip if needed
+                # 达到change skip iter之后，更新skip，右移change_skip_iter，并重新获取数据集
+                # skip是每次跳过多少帧
+                if total_iter >= change_skip_iter[0]:
+                    while total_iter >= change_skip_iter[0]:
+                        cur_skip = max_skip_values[0]
+                        max_skip_values = max_skip_values[1:]
+                        change_skip_iter = change_skip_iter[1:]
+                    print(f'Changing skip to {cur_skip=}')
+                    train_sampler, train_loader = renew_loader(cur_skip)
+                    break
 
-            # fine-tune means fewer augmentations to train the sensory memory
-            # finetuning
-            if config['finetune'] > 0 and not finetuning and total_iter >= config['iterations']:
-                train_sampler, train_loader = renew_loader(cur_skip, finetune=True)
-                finetuning = True
-                model.save_network_interval = 1000
-                break
+                # fine-tune means fewer augmentations to train the sensory memory
+                # finetuning
+                if config['finetune'] > 0 and not finetuning and total_iter >= config['iterations']:
+                    train_sampler, train_loader = renew_loader(cur_skip, finetune=True)
+                    finetuning = True
+                    model.save_network_interval = 1000
+                    break
 
-            model.do_pass(data, total_iter)
-            total_iter += 1
+                model.do_pass(data, total_iter)
+                total_iter += 1
 
-            if total_iter >= config['iterations'] + config['finetune']:
-                break
-finally:
-    # not config['debug'] and total_iter>5000
-    if model.logger is not None:
-        model.save_network(total_iter)
-        model.save_checkpoint(total_iter)
+                if total_iter >= config['iterations'] + config['finetune']:
+                    break
+    finally:
+        # not config['debug'] and total_iter>5000
+        if model.logger is not None:
+            model.save_network(total_iter)
+            model.save_checkpoint(total_iter)
         
 if local_rank == 0 and exp is not None:
     eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
@@ -282,8 +284,8 @@ if local_rank == 0 and exp is not None:
         os.chdir('./XMem_evaluation')
         os.system(f'python evaluation_method.py --results_path "{output_path}"')
         os.chdir('..')
-        os.system(f'zip -qru "{output_path}/masks.zip" "{output_path}/"')
-        os.system(f'rm -r "{output_path}/P*"')
+        os.system(f'zip -qru {output_path}/masks.zip {output_path}/')
+        os.system(f'rm -r {output_path}/P*')
         os.system(f'rm -r "{output_path}/draw"')
     run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
     iters, JF_list = visualize_eval_result(run_dir)

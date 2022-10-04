@@ -33,6 +33,7 @@ def get_similarity(mk, ms, qk, qe):
         # B x N x CK @ B x CK x HW/P = B x N x HW/P
         # 矩阵的每一个元素ij代表着mk^2:Ck x N的第i列和qe:Ck x HW/P的第j列的内积，再乘以与j相关的系数qe
         # 即\Sigma_c kc_i * ecj * qcj
+        # 1004验证了一下，这个算法是正确的，减少计算量，很合理
         two_ab = 2 * (mk @ (qk * qe))
         # sum完 B x 1 x HW/P
         # B x CK x HW/P * B x CK x HW/P = B x CK x HW/P sum - >B x HW/P 

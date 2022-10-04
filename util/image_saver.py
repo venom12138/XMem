@@ -139,7 +139,7 @@ def pool_pairs(images, size, num_objects):
     b, t = images['rgb'].shape[:2]
 
     # limit the number of images saved
-    b = min(2, b)
+    b = min(1, b)
 
     # find max num objects
     max_num_objects = max(num_objects[:b])

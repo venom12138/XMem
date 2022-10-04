@@ -12,7 +12,7 @@ import yaml
 class ExpHandler:
     _home = Path.home()
 
-    def __init__(self, en_wandb=False):
+    def __init__(self, en_wandb=False, resume=''):
         exp_name = os.getenv('exp_name', default='default_group')
         run_name = os.getenv('run_name', default='default_name')
         self._exp_id = f'{self._get_exp_id()}_{run_name}'
@@ -23,10 +23,20 @@ class ExpHandler:
         
         if not os.path.exists(self._save_dir):
             os.makedirs(self._save_dir)
-        if en_wandb:
-            self.wandb_run = wandb.init(group=exp_name, name=run_name, settings=wandb.Settings(start_method="fork"), save_code=True)
-            test_step = wandb.define_metric('test_step')
-            wandb.define_metric(name='eval/eval_acc', step_metric=test_step)
+        
+        if resume != '' and (Path(resume) / 'config.yaml').exists():
+            print('----------resuming-----------')
+            self._save_dir = Path(resume)
+            with open(self._save_dir / 'config.yaml', 'r') as f:
+                config = yaml.safe_load(f)
+            if en_wandb:
+                self.wandb_run = wandb.init(group=exp_name, name=run_name, save_code=True,
+                                            id=config['wandb_id'], resume='allow')
+        else:
+            if en_wandb:
+                self.wandb_run = wandb.init(group=exp_name, name=run_name, settings=wandb.Settings(start_method="fork"), save_code=True)
+                test_step = wandb.define_metric('test_step')
+                wandb.define_metric(name='eval/eval_acc', step_metric=test_step)
         sym_dest = self._get_sym_path('N')
         os.symlink(self._save_dir, sym_dest)
 
@@ -36,9 +46,11 @@ class ExpHandler:
     def log_eval_acc(self, acc, step):
         if self._en_wandb:
             wandb.log({'test_step': step, 'eval/eval_acc': acc})
+            
     def log_image(self, images):
         image = wandb.Image(images, )
         wandb.log({"images": image})
+        
     @staticmethod
     def resume_sanity(new_conf, old_conf):
         print('-' * 10, 'Resume sanity check', '-' * 10)
