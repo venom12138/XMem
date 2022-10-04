@@ -17,22 +17,22 @@ class ExpHandler:
         run_name = os.getenv('run_name', default='default_name')
         self._exp_id = f'{self._get_exp_id()}_{run_name}'
         self._exp_name = exp_name
-
-        self._save_dir = os.path.join('{}/.exp/{}'.format(self._home, os.getenv('WANDB_PROJECT', default='default_project')),
-                                    exp_name, self._exp_id)
         
-        if not os.path.exists(self._save_dir):
-            os.makedirs(self._save_dir)
         
         if resume != '' and (Path(resume) / 'config.yaml').exists():
             print('----------resuming-----------')
             self._save_dir = Path(resume)
             with open(self._save_dir / 'config.yaml', 'r') as f:
                 config = yaml.safe_load(f)
+            self._exp_id = config['exp_id']
             if en_wandb:
                 self.wandb_run = wandb.init(group=exp_name, name=run_name, save_code=True,
                                             id=config['wandb_id'], resume='allow')
         else:
+            self._save_dir = os.path.join('{}/.exp/{}'.format(self._home, os.getenv('WANDB_PROJECT', default='default_project')),
+                                    exp_name, self._exp_id)
+            if not os.path.exists(self._save_dir):
+                os.makedirs(self._save_dir)
             if en_wandb:
                 self.wandb_run = wandb.init(group=exp_name, name=run_name, settings=wandb.Settings(start_method="fork"), save_code=True)
                 test_step = wandb.define_metric('test_step')
