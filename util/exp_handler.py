@@ -36,7 +36,9 @@ class ExpHandler:
     def log_eval_acc(self, acc, step):
         if self._en_wandb:
             wandb.log({'test_step': step, 'eval/eval_acc': acc})
-
+    def log_image(self, images):
+        image = wandb.Image(images, )
+        wandb.log({"images": image})
     @staticmethod
     def resume_sanity(new_conf, old_conf):
         print('-' * 10, 'Resume sanity check', '-' * 10)

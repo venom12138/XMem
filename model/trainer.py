@@ -25,7 +25,7 @@ import model.resnet as resnet
 from model.network import XMem
 from model.losses import LossComputer
 import matplotlib.pyplot as plt
-
+import wandb
 # import resnet
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
@@ -302,24 +302,24 @@ class XMemTrainer:
                                 size = (384, 384)
                                 masks = pool_pairs(images, size, num_filled_objects)
                                 # TODO: wandb add image logging
-                                # self.logger.log_cv2('train/pairs', masks, it)
-                                # try:
-                                b, t = images['rgb'].shape[:2]
-                                max_num_objects = max(num_filled_objects[:b])
-                                if not os.path.exists(f"{self.logger._save_dir}/it={it}_mask"):
-                                    os.makedirs(f"{self.logger._save_dir}/it={it}_mask")
-                                # print(images['first_last_frame_gt'][0][0,0].detach().cpu())
-                                for bi in range(b):
-                                    for oi in range(max_num_objects):
-                                        plt.imsave(f"{self.logger._save_dir}/it={it}_mask/gt_t=0_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][0,oi].detach().cpu(), cmap='gray')
-                                        plt.imsave(f"{self.logger._save_dir}/it={it}_mask/gt_t={t-1}_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][1,oi].detach().cpu(), cmap='gray')
-                                for bi in range(b):
-                                    for ti in range(t):
-                                        for oi in range(max_num_objects):
-                                            if ti != 0:
-                                                plt.imsave(f"{self.logger._save_dir}/it={it}_mask/f_t={ti}_b={bi}_oi={oi}.jpg", images['fmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
-                                            if ti != t-1:
-                                                plt.imsave(f"{self.logger._save_dir}/it={it}_mask/b_t={ti}_b={bi}_oi={oi}.jpg", images['bmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
+                                self.logger.log_image(masks)
+                                
+                                # b, t = images['rgb'].shape[:2]
+                                # max_num_objects = max(num_filled_objects[:b])
+                                # if not os.path.exists(f"{self.logger._save_dir}/it={it}_mask"):
+                                #     os.makedirs(f"{self.logger._save_dir}/it={it}_mask")
+                                # # print(images['first_last_frame_gt'][0][0,0].detach().cpu())
+                                # for bi in range(b):
+                                #     for oi in range(max_num_objects):
+                                #         plt.imsave(f"{self.logger._save_dir}/it={it}_mask/gt_t=0_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][0,oi].detach().cpu(), cmap='gray')
+                                #         plt.imsave(f"{self.logger._save_dir}/it={it}_mask/gt_t={t-1}_b={bi}_oi={oi}.jpg", images['first_last_frame_gt'][bi][1,oi].detach().cpu(), cmap='gray')
+                                # for bi in range(b):
+                                #     for ti in range(t):
+                                #         for oi in range(max_num_objects):
+                                #             if ti != 0:
+                                #                 plt.imsave(f"{self.logger._save_dir}/it={it}_mask/f_t={ti}_b={bi}_oi={oi}.jpg", images['fmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
+                                #             if ti != t-1:
+                                #                 plt.imsave(f"{self.logger._save_dir}/it={it}_mask/b_t={ti}_b={bi}_oi={oi}.jpg", images['bmasks_%d'%ti][bi][oi].detach().cpu(), cmap='gray')
                                 
 
             if self._is_train:

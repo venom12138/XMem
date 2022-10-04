@@ -124,6 +124,7 @@ if config['debug']:
     config['finetune'] = 0
     config['log_text_interval'] = config['log_image_interval'] = 1
     config['save_network_interval'] = config['save_checkpoint_interval'] = 2
+    config['log_image_interval'] = 1
 
 """
 Model related

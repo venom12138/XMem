@@ -45,7 +45,7 @@ values should contain lists of cv2 images
 """
 def get_image_array(images, grid_shape, captions={}):
     h, w = grid_shape
-    cate_counts = len(images)
+    cate_counts = len(images) # mask RGB ...图片的类数
     rows_counts = len(next(iter(images.values())))
 
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -62,17 +62,50 @@ def get_image_array(images, grid_shape, captions={}):
         for i, line in enumerate(caption.split('\n')):
             cv2.putText(output_image, line, (10, col_cnt*w+100+i*dy),
                     font, 0.8, (255,255,255), 2, cv2.LINE_AA)
+        if 'fMask' in k:
+            for row_cnt, img in enumerate(v):
+                im_shape = img.shape
+                if len(im_shape) == 2:
+                    img = img[..., np.newaxis]
 
-        # Put images
-        for row_cnt, img in enumerate(v):
-            im_shape = img.shape
-            if len(im_shape) == 2:
-                img = img[..., np.newaxis]
+                img = (img * 255).astype('uint8')
 
-            img = (img * 255).astype('uint8')
+                output_image[(col_cnt+0)*w:(col_cnt+1)*w,
+                            (row_cnt+2)*h:(row_cnt+3)*h, :] = img
+        elif 'bMask' in k:
+            # Put images
+            for row_cnt, img in enumerate(v):
+                im_shape = img.shape
+                if len(im_shape) == 2:
+                    img = img[..., np.newaxis]
 
-            output_image[(col_cnt+0)*w:(col_cnt+1)*w,
-                         (row_cnt+1)*h:(row_cnt+2)*h, :] = img
+                img = (img * 255).astype('uint8')
+
+                output_image[(col_cnt+0)*w:(col_cnt+1)*w,
+                            (row_cnt+1)*h:(row_cnt+2)*h, :] = img
+        elif 'Mask' in k:
+            for row_cnt, img in enumerate(v):
+                im_shape = img.shape
+                if len(im_shape) == 2:
+                    img = img[..., np.newaxis]
+
+                img = (img * 255).astype('uint8')
+                if row_cnt == 0:
+                    output_image[(col_cnt+0)*w:(col_cnt+1)*w,
+                                (row_cnt+1)*h:(row_cnt+2)*h, :] = img
+                else:
+                    output_image[(col_cnt+0)*w:(col_cnt+1)*w,
+                                h*rows_counts:h*(rows_counts+1), :] = img
+        else:
+            for row_cnt, img in enumerate(v):
+                im_shape = img.shape
+                if len(im_shape) == 2:
+                    img = img[..., np.newaxis]
+
+                img = (img * 255).astype('uint8')
+
+                output_image[(col_cnt+0)*w:(col_cnt+1)*w,
+                            (row_cnt+1)*h:(row_cnt+2)*h, :] = img
             
         col_cnt += 1
 
