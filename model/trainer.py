@@ -380,6 +380,7 @@ class XMemTrainer:
         else:
             losses['total_loss'].backward() 
             self.optimizer.step()
+        print('scheduler.step()')
         self.scheduler.step()
         
 

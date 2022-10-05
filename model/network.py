@@ -64,9 +64,9 @@ class XMem(nn.Module):
         if model_weights is not None:
             self.load_weights(model_weights, init_as_zero_if_needed=True)
     
-    # @property
-    # def dtype(self):
-    #     return self.key_encoder.conv1.weight.dtype
+    @property
+    def dtype(self):
+        return self.key_encoder.conv1.weight.dtype
     
     def encode_text(self, text):
         x = self.clip_text_encoder.token_embedding(text).type(torch.float16)  # [batch_size, n_ctx, d_model]
@@ -80,7 +80,7 @@ class XMem(nn.Module):
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.clip_text_encoder.text_projection
-        x = self.text_proj(x) # [batch_size, n_ctx, 256]
+        x = self.text_proj(x.type(self.dtype)) # [batch_size, n_ctx, 256]
         return x
     
     # memory_value: [B, max_obj_num, x_in_dim/value_dim, H//16, W//16]
