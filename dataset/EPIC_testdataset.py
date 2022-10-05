@@ -188,6 +188,7 @@ class EPICtestDataset(Dataset):
             'cls_gt': cls_gt, # [1, 1, H, W]
             'selector': selector, # [target_objects] 前num_objects个是1，后面是0
             'info': info,
+            'text': video_value['narration'],
             'whether_save_mask': masks_count,
         }
 

@@ -45,25 +45,30 @@ class FeatureFusionBlock(nn.Module):
         # fuse之后 [b, max_obj_num, g_out_dim, H//16, W//16]
         return g
 
-class FlowValueFuser(nn.Module):
-    def __init__(self, x_in_dim, f_in_dim, out_dim):
+class ValueFuser(nn.Module):
+    def __init__(self, x_in_dim, f_in_dim, t_in_dim, out_dim):
         super().__init__()
 
-        self.block1 = GroupResBlock(x_in_dim+f_in_dim, out_dim)
+        self.block1 = GroupResBlock(x_in_dim+f_in_dim+t_in_dim, out_dim)
         self.attention = CBAM(out_dim)
         self.block2 = GroupResBlock(out_dim, out_dim)
     
-    # memory_value: [b, max_obj_num, x_in_dim/value_dim, H//16, W//16]
+    # memory_value: [b, max_obj_num, x_in_dim or value_dim, H//16, W//16]
     # flow_feat_16: [b, f_in_dim, H//16, W//16]
+    # text: [b, t_in_dim]
     # return: [b, max_obj_num, out_dim/value_dim, H//16, W//16]
-    def forward(self, memory_value, flow_feat_16):
+    def forward(self, memory_value, flow_feat_16=None, text_feat=None):
         batch_size, num_objects = memory_value.shape[:2]
-        # 将x和g cat起来
-        flow_feat_16 = flow_feat_16.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
-        fuse_feat = torch.cat([memory_value, flow_feat_16], dim=2) # B x max_obj_num x x_in_dim+f_in_dim x H//16 x W//16
+        HbyP, WbyP = memory_value.shape[-2:]
+        if flow_feat_16 != None:
+            flow_feat_16 = flow_feat_16.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
+            memory_value = torch.cat([memory_value, flow_feat_16], dim=2) # B x max_obj_num x (x_in_dim+f_in_dim) x H//16 x W//16
+        if text_feat != None:
+            text_feat = text_feat.unsqueeze(1).unsqueeze(3).unsqueeze(3).repeat(1, num_objects, 1, HbyP, WbyP) # B x max_obj_num x t_in_dim x H//16 x W//16
+            memory_value = torch.cat([memory_value, text_feat], dim=2) # B x max_obj_num x (x_in_dim+f_in_dim+t_in_dim) x H//16 x W//16        
 
         # distributor后 g:[b, max_obj_num, x_in_dim+f_in_dim, H//16, W//16]
-        memory_value = self.block1(fuse_feat)
+        memory_value = self.block1(memory_value)
         # 经过block1之后，g:[b, max_obj_num, out_dim, H//16, W//16]
         r = self.attention(memory_value.flatten(start_dim=0, end_dim=1))
         r = r.view(batch_size, num_objects, *r.shape[1:])

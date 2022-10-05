@@ -16,6 +16,7 @@ from inference.inference_core import InferenceCore
 from progressbar import progressbar
 from tqdm import tqdm
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
+import clip
 
 # try:
 #     import hickle as hkl
@@ -39,7 +40,8 @@ parser = ArgumentParser()
 parser.add_argument('--model', default='./saves/XMem.pth')
 #ATTENTION!!!!!!!!!!!!!!!!!!!!!!!!!!
 # TODO: Note this param
-parser.add_argument('--not_use_flow', action='store_true')
+parser.add_argument('--use_flow', type=int, default=0)
+parser.add_argument('--use_text', help='whether to use text', type=int, default=0)
 # Data options
 parser.add_argument('--EPIC_path', default='./val_data')
 parser.add_argument('--yaml_path', default='./val_data/EPIC100_state_positive_val.yaml')
@@ -91,11 +93,13 @@ if os.path.exists(f'{out_path}/per-sequence_results-val.csv'):
     os.remove(f'{out_path}/per-sequence_results-val.csv')
 
 print(out_path)
-use_flow = not args.not_use_flow
+use_flow = args.use_flow
 if 'noflow' in args.model:
     use_flow = False
 if use_flow == False:    
     print('not use flow !!!!!!!!!!!')
+if args.use_text == 0:
+    print('not use text !!!!!!')
 
 dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
 val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
@@ -133,7 +137,12 @@ for data in tqdm(val_loader):
     #     all_masks = data['whether_save_mask'][0][:].cpu().sum().item()
     #     second_half_start = all_masks // 2
     #     masks_to_now = 0
-
+    text = data['text']
+    text = [f"a photo of {t}" for t in text]
+    if config['use_text']:
+        text = clip.tokenize(text).cuda()
+        # [1, 256]
+        text_feat = network.encode_text(text)
     for ti in (range(vid_length)):
         with torch.cuda.amp.autocast(enabled=not args.benchmark):
             
@@ -146,6 +155,7 @@ for data in tqdm(val_loader):
                     
             rgb = data['rgb'][0][ti].cuda() # 3*H*W
             flow = data['flow'][0][ti].cuda() # 2*H*W
+            
             if ti == 0:
                 msk = data['first_frame_gt'][0][ti].cuda() # H*W
                 num_objects = msk.shape[0]
@@ -187,15 +197,24 @@ for data in tqdm(val_loader):
 
             # Run the model on this frame
             if msk is not None:
-                if use_flow:
-                    prob = processor.step(rgb, flow, msk, end=(ti==vid_length-1))
+                if use_flow and config['use_text']:
+                    prob = processor.step(rgb, flow=flow, text=text_feat, mask=msk, end=(ti==vid_length-1))
+                elif use_flow:
+                    prob = processor.step(rgb, flow=flow, mask=msk, end=(ti==vid_length-1))
+                elif config['use_text']:
+                    prob = processor.step(rgb, flow=None, text=text_feat, mask=msk, end=(ti==vid_length-1))
                 else:
-                    prob = processor.step(rgb, flow=None, mask = msk, end=(ti==vid_length-1))
+                    prob = processor.step(rgb, mask = msk, end=(ti==vid_length-1))
             else:
-                if use_flow:
-                    prob = processor.step(rgb, flow, end=(ti==vid_length-1))
+                if use_flow and config['use_text']:
+                    prob = processor.step(rgb, flow=flow, text=text_feat, end=(ti==vid_length-1))
+                elif use_flow:
+                    prob = processor.step(rgb, flow=flow, end=(ti==vid_length-1))
+                elif config['use_text']:
+                    prob = processor.step(rgb, flow=None, text=text_feat, end=(ti==vid_length-1))
                 else:
-                    prob = processor.step(rgb, flow=None, end=(ti==vid_length-1))
+                    prob = processor.step(rgb, end=(ti==vid_length-1))
+            
 
             # Upsample to original size if needed
             if need_resize:

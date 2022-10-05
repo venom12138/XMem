@@ -17,6 +17,7 @@ from model.memory_util import *
 # from memory_util import *
 from torchsummary import summary
 import clip
+    
 class XMem(nn.Module):
     def __init__(self, config, model_path=None, map_location=None):
         """
@@ -31,18 +32,29 @@ class XMem(nn.Module):
 
         self.key_encoder = KeyEncoder() # R50 前三个stage: 
         self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)
-        self.flow_encoder = FlowEncoder()
-        self.flow_value_fuser = FlowValueFuser(self.value_dim, 256, self.value_dim)
         
-        # clip model
-        # clip_model,_ = clip.load("ViT-L/14@336px")
-        # self.token_embedding = clip_model.token_embedding
-        # self.positional_embedding = clip_model.positional_embedding
-        # self.transformer = clip_model.transformer
-        # self.ln_final= clip_model.ln_final
-        # self.text_projection = clip_model.text_projection
-        # del clip_model
+        if config['use_text']:
+            clip_model,_ = clip.load("RN50") # clip.load("ViT-L/14@336px")
+            self.clip_text_encoder = nn.Module()
+            self.clip_text_encoder.token_embedding = clip_model.token_embedding
+            self.clip_text_encoder.positional_embedding = clip_model.positional_embedding
+            self.clip_text_encoder.transformer = clip_model.transformer
+            self.clip_text_encoder.ln_final= clip_model.ln_final
+            self.clip_text_encoder.text_projection = clip_model.text_projection
+            del clip_model
+            self.text_dim = 256
+            self.text_proj = nn.Linear(self.clip_text_encoder.text_projection.shape[1], self.text_dim)
         
+        self.use_text = config['use_text']
+        self.use_flow = config['use_flow']
+        if self.use_text and self.use_flow:
+            self.flow_encoder = FlowEncoder()
+            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=256, out_dim=self.value_dim)
+        elif self.use_flow:
+            self.flow_encoder = FlowEncoder()
+            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=0, out_dim=self.value_dim)
+        elif self.use_text:
+            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=0, t_in_dim=256, out_dim=self.value_dim)
         # Projection from f16 feature space to key/value space
         # indim:1024,即f16；outdim:key_dim
         self.key_proj = KeyProjection(1024, self.key_dim)
@@ -51,7 +63,42 @@ class XMem(nn.Module):
 
         if model_weights is not None:
             self.load_weights(model_weights, init_as_zero_if_needed=True)
+    
+    # @property
+    # def dtype(self):
+    #     return self.key_encoder.conv1.weight.dtype
+    
+    def encode_text(self, text):
+        x = self.clip_text_encoder.token_embedding(text).type(torch.float16)  # [batch_size, n_ctx, d_model]
 
+        x = x + self.clip_text_encoder.positional_embedding.type(torch.float16)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.clip_text_encoder.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.clip_text_encoder.ln_final(x).type(torch.float16)
+
+        # x.shape = [batch_size, n_ctx, transformer.width]
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.clip_text_encoder.text_projection
+        x = self.text_proj(x) # [batch_size, n_ctx, 256]
+        return x
+    
+    # memory_value: [B, max_obj_num, x_in_dim/value_dim, H//16, W//16]
+    # flow: [b, f_in_dim, H//16, W//16]
+    # text: [b, t_in_dim]
+    # return: b x max_obj_num x x_in_dim/value_dim x H/P x W/P
+    def fuse_value(self, mv=None, flow_feat=None, text_feat=None):
+        if self.use_text and self.use_flow:
+            assert mv != None and flow_feat != None and text_feat != None
+        
+        elif self.use_flow:
+            assert mv != None and flow_feat != None and text_feat == None
+        
+        elif self.use_text:
+            assert mv != None and text_feat != None and flow_feat == None
+            
+        return self.value_fuser(memory_value=mv, flow_feat_16=flow_feat, text_feat=text_feat)
+        
     def encode_key(self, frame, need_sk=True, need_ek=True): 
         # Determine input shape
         # frame:[B, num_frames, C, H, W]
@@ -116,12 +163,6 @@ class XMem(nn.Module):
     def encode_flow(self, flow):
         return self.flow_encoder(flow)
     
-    # memory_value: [B, max_obj_num, x_in_dim/value_dim, H//16, W//16]
-    # flow: [b, f_in_dim, H//16, W//16]
-    # return: b x max_obj_num x x_in_dim/value_dim x H/P x W/P
-    def fuse_flow_value(self, mv, flow_feat):
-        return self.flow_value_fuser(mv, flow_feat)
-    
     # Used in training only. 
     # This step is replaced by MemoryManager in test time
     def read_memory(self, query_key, query_selection, memory_key, 
@@ -174,8 +215,8 @@ class XMem(nn.Module):
             return self.segment(*args, **kwargs)
         elif mode == 'encode_flow':
             return self.encode_flow(*args, **kwargs)
-        elif mode == 'fuse_flow_value':
-            return self.fuse_flow_value(*args, **kwargs)
+        elif mode == 'fuse_value':
+            return self.fuse_value(*args, **kwargs)
         else:
             raise NotImplementedError
 
@@ -232,10 +273,21 @@ class XMem(nn.Module):
     def load_weights(self, src_dict, init_as_zero_if_needed=False):
         # Maps SO weight (without other_mask) to MO weight (with other_mask)
         load_strict = False
+        flow_check = False
+        text_check = False
         for k in list(src_dict.keys()):
-            
-            if ('flow_encoder' in k) or ('flow_value_fuser' in k):
+            if (('flow_encoder' in k) or ('value_fuser' in k)):
+                flow_check = True
+            if ('text_proj' in k):
+                text_check = True
+            if (('flow_encoder' in k) or ('value_fuser' in k)) and (not self.use_text) and self.use_flow:
+                flow_check = True
                 load_strict = True
+            if ('text_proj' in k) and (not self.use_flow) and self.use_text:
+                text_check = True
+                load_strict = True
+            if self.use_flow and self.use_text:
+                load_strict = flow_check and text_check
             if k == 'value_encoder.conv1.weight':
                 if src_dict[k].shape[1] == 4:
                     print('Converting weights from single object to multiple objects.')
@@ -246,7 +298,7 @@ class XMem(nn.Module):
                     else:
                         print('Zero-initialized padding.')
                     src_dict[k] = torch.cat([src_dict[k], pads], 1)
-        # print(load_strict)
+        print(f'----------load_strict:{load_strict}--------')
         sd_before_load = deepcopy(self.state_dict())
         msg = self.load_state_dict(src_dict, strict=load_strict)
         # print(f'missing keys:{msg}')
@@ -259,10 +311,20 @@ class XMem(nn.Module):
             if key.startswith('key_encoder') or key.startswith('value_encoder'):
                 if 'running_mean' in key or 'running_var' in key or 'num_batches_tracked' in key: 
                     continue
+            if key.startswith('clip_text_encoder'):
+                continue
+            
             new_keys.append(key)
         print('-------------------- Loaded weights --------------------')
         print(f'Weights unloaded:{new_keys}')
         print('----------------------------')
+        # TODO sanity check 太复杂了，不好做
         if load_strict == False:
-            assert len(new_keys) == len(self.flow_encoder.state_dict().keys()) + \
-                                    len(self.flow_value_fuser.state_dict().keys())
+            if self.use_text and self.use_flow:
+                assert ((len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
+                    or len(new_keys) == 0 )
+            elif self.use_flow:
+                assert ((len(new_keys) == len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
+                    or len(new_keys) == 0 )
+            elif self.use_text:
+                assert len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.value_fuser.state_dict().keys())

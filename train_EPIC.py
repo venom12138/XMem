@@ -22,6 +22,28 @@ from util.exp_handler import *
 import pathlib
 from visualize.visualize_eval_result_eps import visualize_eval_result
 import wandb
+from glob import glob
+
+# 从测试集的每一个video中随即选取一张mask，然后把每一个iter预测的这张mask都存下来，可视化结果
+def get_eval_pics(yaml_root, output_path, val_data_path, iterations):
+    with open(yaml_root, 'r') as f:
+        info = yaml.safe_load(f)
+    selected_pics = {} # {video_key: {gt_path:gt, rgb_path:rgb, pred_path: [pred1, pred2, ...]}}
+    for key, value in info.items():
+        partition = key.split('_')[0]
+        video_id = '_'.join(key.split('_')[:2])
+        anno_path = f'{val_data_path}/{partition}/anno_masks/{video_id}/{key}'
+        anno_pics = [pic.split('/')[-1] for pic in sorted(glob(f'{anno_path}/*.png'))[1:]] # [frame_0000xxx.png]
+        selected_pic = random.choice(anno_pics)
+        pred_masks = []
+        for it in iterations:
+            eval_it_path = f'{output_path}/eval_{it}'
+            pred_mask_path = f'{eval_it_path}/{partition}/{video_id}/{key}/{selected_pic}'
+            pred_masks.append(pred_mask_path)
+        rgb_path = [f'{val_data_path}/{partition}/rgb_frames/{video_id}/{key}/{selected_pic.replace("png", "jpg")}']*len(pred_masks)
+        gt_path = [f'{val_data_path}/{partition}/anno_masks/{video_id}/{key}/{selected_pic}']*len(pred_masks)
+        selected_pics.update({key: {'rgb_path': rgb_path, 'gt_path': gt_path, 'pred_path': pred_masks}})
+    return selected_pics
 
 def get_EPIC_parser():
     parser = ArgumentParser()
@@ -32,6 +54,7 @@ def get_EPIC_parser():
 
     # Data parameters
     parser.add_argument('--epic_root', help='EPIC data root', default='./EPIC_train') # TODO
+    parser.add_argument('--val_data_root', help='EPIC val data root', default='./val_data') # TODO
     parser.add_argument('--yaml_root', help='yaml root', default='./EPIC_train/EPIC100_state_positive_train.yaml')
     parser.add_argument('--num_workers', help='Total number of dataloader workers across all GPUs processes', type=int, default=16)
 
@@ -69,7 +92,7 @@ def get_EPIC_parser():
     parser.add_argument('--save_checkpoint_interval', default=15000, type=int)
 
     parser.add_argument('--debug', help='Debug mode which logs information more often', action='store_true')
-    parser.add_argument('--no_flow', help='without using flow information', action='store_true')
+    parser.add_argument('--use_flow', default=1, type=int, choices=[0,1])
     parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
 
     # # Multiprocessing parameters, not set by users
@@ -80,8 +103,9 @@ def get_EPIC_parser():
     parser.add_argument('--only_eval', action='store_true')
     parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
+    parser.add_argument('--use_text', action='store_true')
     args = parser.parse_args()
-    return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': not args.no_flow}}
+    return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
 """
 Initial setup
@@ -121,7 +145,7 @@ print(f'We are assuming {config["num_gpus"]} GPUs.')
 print(f'We are now starting stage EPIC')
 
 if config['debug']:
-    config['batch_size'] = 1
+    config['batch_size'] = 2
     config['num_frames'] = 3
     config['iterations'] = 3
     config['finetune'] = 0
@@ -265,7 +289,9 @@ if not config["only_eval"]:
         if model.logger is not None:
             model.save_network(total_iter)
             model.save_checkpoint(total_iter)
-        
+
+del model
+
 if local_rank == 0 and exp is not None:
     eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
     eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
@@ -282,17 +308,38 @@ if local_rank == 0 and exp is not None:
             continue
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
-        os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}"')
+        os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])}')
         os.chdir('./XMem_evaluation')
         os.system(f'python evaluation_method.py --results_path "{output_path}"')
         os.chdir('..')
-        os.system(f'zip -qru {output_path}/masks.zip {output_path}/')
-        os.system(f'rm -r {output_path}/P*')
-        os.system(f'rm -r "{output_path}/draw"')
+        # log eval pictures
+        
     run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
     iters, JF_list = visualize_eval_result(run_dir)
     for i in range(len(iters)):
         exp.log_eval_acc(JF_list[i], iters[i])
+    
+    selected_pics = get_eval_pics(yaml_root=config['yaml_root'], 
+                            output_path=f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}',
+                            val_data_path=config['val_data_root'],
+                            iterations=eval_iters)
+    output_imgs = pair_pics_together(selected_pics)
+    for img in output_imgs:
+        # print(sys.getsizeof(img))
+        # plt.imshow(img)
+        # plt.show()
+        img = wandb.Image(img)
+        wandb.log({"eval_imgs": img})
+    
+    # remove mask file to save space 
+    for iteration in eval_iters:
+        exp_name = os.getenv('exp_name', default='default_group')
+        home = pathlib.Path.home()
+        wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
+        output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
+        os.system(f'zip -qru {output_path}/masks.zip {output_path}/')
+        os.system(f'rm -r {output_path}/P*')
+        os.system(f'rm -r "{output_path}/draw"')
     # exp.write
 # network_in_memory = model.XMem.module.state_dict()
 

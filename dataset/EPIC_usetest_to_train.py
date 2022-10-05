@@ -270,6 +270,7 @@ class EPICTestToTrainDataset(Dataset):
             'first_last_frame_gt': first_last_frame_gt, # [2, max_num_obj, H, W] one hot
             'cls_gt': cls_gt, # [2, 1, H, W]
             'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
+            'text':video_value['narration'],
             'info': info,
         }
 

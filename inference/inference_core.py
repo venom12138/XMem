@@ -39,9 +39,10 @@ class InferenceCore:
         # self.all_labels = [l.item() for l in all_labels]
         self.all_labels = all_labels
 
-    def step(self, image, flow=None, mask=None, valid_labels=None, end=False):
+    def step(self, image, flow=None, text=None, mask=None, valid_labels=None, end=False):
         # image: 3*H*W
         # flow: 2*H*W
+        # text: 1*256
         # mask: num_objects*H*W or None
         self.curr_ti += 1
         image, self.pad = pad_divide_by(image, 16)
@@ -67,12 +68,14 @@ class InferenceCore:
         multi_scale_features = (f16, f8, f4)
         if flow != None:
             flow_feat = self.network.encode_flow(flow)
+        else:
+            flow_feat = None
 
         # segment the current frame is needed
         if need_segment:
             memory_readout = self.memory.match_memory(key, selection).unsqueeze(0)
-            if flow != None:
-                memory_readout = self.network.fuse_flow_value(memory_readout, flow_feat)
+            if flow != None or text != None:
+                memory_readout = self.network.fuse_value(mv=memory_readout, flow_feat=flow_feat, text_feat=text)
             
             hidden, _, pred_prob_with_bg = self.network.segment(multi_scale_features, memory_readout, 
                                     self.memory.get_hidden(), h_out=is_normal_update, strip_bg=False)

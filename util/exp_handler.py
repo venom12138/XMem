@@ -8,6 +8,9 @@ from pathlib import Path
 import numpy as np
 import wandb
 import yaml
+import cv2
+from PIL import Image
+import matplotlib.pyplot as plt
 
 class ExpHandler:
     _home = Path.home()
@@ -137,6 +140,55 @@ class ExpHandler:
     def finish(self):
         Path(f'{self._save_dir}/finished').touch()
         os.rename(self._get_sym_path('N'), self._get_sym_path('Y'))
+
+# selected_pics_info: {video_key: {gt_path:[gt, gt,...], rgb_path:[rgb, rgb, ...], pred_path: [pred1, pred2, ...]}}
+def pair_pics_together(selected_pics_info):
+    h, w = [456, 256]
+    
+    cate_counts = len(selected_pics_info[list(selected_pics_info.keys())[0]].keys()) # mask RGB pred ...图片的类数，有多少行
+    rows_counts = len(selected_pics_info[list(selected_pics_info.keys())[0]]['pred_path']) # 有多少列，沿着行方向count
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    output_imgs = []
+    for key, value in selected_pics_info.items():
+        output_image = np.zeros([w*cate_counts, h*(rows_counts+1), 3], dtype=np.uint8)
+        col_cnt = 0 # 沿着列方向count
+        skip_this_video = False
+        # 选择一个video
+        # video内部依次RGB、mask、pred, 也就是v会依次是[RGB],[gt], [pred]
+        for k, v in value.items():
+            # Default as key value itself
+            caption = k.split('_')[0]
+
+            # Handles new line character
+            dy = 40
+            for i, line in enumerate(caption.split('\n')):
+                cv2.putText(output_image, line, (10, col_cnt*w+100+i*dy),
+                        font, 0.8, (255,255,255), 2, cv2.LINE_AA)
+            for row_cnt, img_path in enumerate(v):
+                try:
+                    if 'rgb' in k:
+                        img = np.array(Image.open(img_path))
+                    else:
+                        img = np.array(Image.open(img_path))
+                        img = (img * 255).astype('uint8')
+                except:
+                    print(f'img not found:{img_path}')
+                    skip_this_video = True
+                    break
+                im_shape = img.shape
+                if len(im_shape) == 2:
+                    img = img[..., np.newaxis]
+
+                output_image[(col_cnt+0)*w:(col_cnt+1)*w,
+                            (row_cnt+1)*h:(row_cnt+2)*h, :] = img
+            col_cnt += 1
+        if not skip_this_video:
+            # plt.imshow(output_image)
+            # plt.show()
+            # dd
+            output_imgs.append(output_image)
+    return output_imgs
 
 def consume_prefix_in_state_dict_if_present(
         state_dict, prefix

@@ -26,6 +26,8 @@ from model.network import XMem
 from model.losses import LossComputer
 import matplotlib.pyplot as plt
 import wandb
+import clip
+
 # import resnet
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
@@ -42,6 +44,7 @@ class XMemTrainer:
         except:
             self.XMem = nn.parallel.DataParallel(
                 XMem(config).cuda())
+        
         # Set up logger when local_rank = 0
         self.logger = logger
         self.save_path = save_path
@@ -53,7 +56,11 @@ class XMemTrainer:
         self.loss_computer = LossComputer(config)
 
         self.train()
-
+        if self.config['use_text']:
+            # freeze CLIP text encoder
+            for param in self.XMem.module.clip_text_encoder.parameters():
+                param.requires_grad = False
+        
         # [TODO]: freeze key encoder 和 value encoder
         if self.config['freeze'] == 1:
             if self.config['use_flow']:
@@ -103,6 +110,8 @@ class XMemTrainer:
         frames = data['rgb']
         # [b, num_frames, 2, H, W]
         flows = data['flow']
+        text = data['text']
+        text = [f"a photo of {t}" for t in text]
         # [b, 1, max_num_obj, H, W]
         first_frame_gt = data['first_last_frame_gt'][:,0].unsqueeze(1).float()
         last_frame_gt = data['first_last_frame_gt'][:,1].unsqueeze(1).float()
@@ -124,6 +133,10 @@ class XMemTrainer:
             # f8:[B, num_frames, 512, H//8, W//8]
             # f4:[B, num_frames, 256, H//4, W//4]
             # flow_feat:[B, num_frames, 256, H//16, W//16]
+            if self.config['use_text']:
+                text = clip.tokenize(text).cuda()
+                # [B, 256]
+                text_feat = self.XMem.module.encode_text(text)
 
             # 正常的attention是query和key做内积，找出interest的区域，这里因为是frame - frame的对应，
             # 所以qk和mk的内积充当了key的角色，qe selection充当了query的角色
@@ -174,10 +187,17 @@ class XMemTrainer:
                     ], 0) if shrinkage is not None else None
 
                 # Segment frame ti, selection就是query_selection
+                # memory: B x max_obj_num x CV x H/P x W/P
+                # text_feat: [B, 256]
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
-                if self.config['use_flow']:
-                    memory_readout = self.XMem('fuse_flow_value', memory_readout, flow_feats[:,ti]) # shape不变
+                if self.config['use_flow'] and self.config['use_text']:
+                    # flow_feats[:,ti]:B x Cf x H/P x W/P
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=text_feat) # shape不变
+                elif self.config['use_flow']:
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=None) # shape不变
+                elif self.config['use_text']:
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))
                 args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
@@ -263,8 +283,13 @@ class XMemTrainer:
                 # Segment frame ti, selection就是query_selection
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
-                if self.config['use_flow']:
-                    memory_readout = self.XMem('fuse_flow_value', memory_readout, flow_feats[:,ti]) # shape不变
+                if self.config['use_flow'] and self.config['use_text']:
+                    # flow_feats[:,ti]:B x Cf x H/P x W/P
+                    memory_readout = self.XMem('fuse_value', memory_readout, flow_feats[:,ti], text_feat) # shape不变
+                elif self.config['use_flow']:
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=None) # shape不变
+                elif self.config['use_text']:
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))
                 args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
