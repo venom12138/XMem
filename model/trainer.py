@@ -63,18 +63,18 @@ class XMemTrainer:
         
         # [TODO]: freeze key encoder 和 value encoder
         if self.config['freeze'] == 1:
-            if self.config['use_flow']:
-                for param in self.XMem.module.key_encoder.parameters():
-                    param.requires_grad = False
-                for param in self.XMem.module.value_encoder.parameters():
-                    param.requires_grad = False
-            else:
-                for param in self.XMem.module.flow_encoder.parameters():
-                    param.requires_grad = False
-                for param in self.XMem.module.flow_value_fuser.parameters():
-                    param.requires_grad = False
-                print('----------------------------')
-                print('not using flow information!!')
+            # if self.config['use_flow']:
+            for param in self.XMem.module.key_encoder.parameters():
+                param.requires_grad = False
+            for param in self.XMem.module.value_encoder.parameters():
+                param.requires_grad = False
+            # else:
+            #     for param in self.XMem.module.flow_encoder.parameters():
+            #         param.requires_grad = False
+            #     for param in self.XMem.module.flow_value_fuser.parameters():
+            #         param.requires_grad = False
+            #     print('----------------------------')
+            #     print('not using flow information!!')
         else:
             print('not freeze!!!')
 
