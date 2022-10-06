@@ -145,3 +145,4 @@ dmypy.json
 /EPIC_train/
 /wandb/
 *.sh
+*.csv

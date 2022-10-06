@@ -158,7 +158,7 @@ def pair_pics_together(selected_pics_info):
         # video内部依次RGB、mask、pred, 也就是v会依次是[RGB],[gt], [pred]
         for k, v in value.items():
             # Default as key value itself
-            caption = k.split('_')[0]
+            caption = key + k.split('_')[0]
 
             # Handles new line character
             dy = 40

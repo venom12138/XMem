@@ -34,7 +34,7 @@ class XMem(nn.Module):
         self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)
         
         if config['use_text']:
-            clip_model,_ = clip.load("RN50") # clip.load("ViT-L/14@336px")
+            clip_model,_ = clip.load("ViT-L/14@336px") # clip.load("ViT-L/14@336px")
             self.clip_text_encoder = nn.Module()
             self.clip_text_encoder.token_embedding = clip_model.token_embedding
             self.clip_text_encoder.positional_embedding = clip_model.positional_embedding
