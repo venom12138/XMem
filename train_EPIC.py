@@ -301,7 +301,7 @@ del model
 if local_rank == 0 and exp is not None:
     eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
     eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
-    if total_iter != eval_iters[-1]:
+    if total_iter != eval_iters[-1] and total_iter>eval_iter[-1]:
         eval_iters.append(total_iter)
     home = pathlib.Path.home()
     wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
@@ -321,10 +321,10 @@ if local_rank == 0 and exp is not None:
         os.makedirs(output_path, exist_ok=True)
         if not os.path.exists(f'{output_path}/global_results-val.csv'):
             os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])}')
-        os.chdir('./XMem_evaluation')
-        os.system(f'python evaluation_method.py --results_path "{output_path}"')
-        os.chdir('..')
-        
+            os.chdir('./XMem_evaluation')
+            os.system(f'python evaluation_method.py --results_path "{output_path}"')
+            os.chdir('..')
+            
         temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
         # log eval pictures
         for key, value in selected_pics.items():
@@ -332,7 +332,8 @@ if local_rank == 0 and exp is not None:
             partition = key.split('_')[0]
             video_id = '_'.join(key.split('_')[:2])
             os.makedirs(f'{temp_save_path}/{partition}/{video_id}/{key}', exist_ok=True)
-            shutil.copy(pred_path, f'{temp_save_path}/{partition}/{video_id}/{key}')
+            if os.path.exists(pred_path):
+                shutil.copy(pred_path, f'{temp_save_path}/{partition}/{video_id}/{key}')
             selected_pics[key]['pred_path'][i] = f'{temp_save_path}/{partition}/{video_id}/{key}/{pred_path.split("/")[-1]}'
         
         try:
@@ -360,7 +361,7 @@ if local_rank == 0 and exp is not None:
         exp_name = os.getenv('exp_name', default='default_group')
         home = pathlib.Path.home()
         wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
-        # output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
+        output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
         os.system(f'zip -qru {output_path}/select_pics.zip {temp_save_path}/')
         os.system(f'rm -r {temp_save_path}/')

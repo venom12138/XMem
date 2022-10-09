@@ -147,7 +147,7 @@ class ExpHandler:
         os.rename(self._get_sym_path('N'), self._get_sym_path('Y'))
 
 # selected_pics_info: {video_key: {gt_path:[gt, gt,...], rgb_path:[rgb, rgb, ...], pred_path: [pred1, pred2, ...]}}
-def once_pair_pics_together(selected_pics_info):
+def pair_pics_together(selected_pics_info):
     h, w = [456, 256]
     
     cate_counts = len(selected_pics_info[list(selected_pics_info.keys())[0]].keys()) # mask RGB pred ...图片的类数，有多少行
