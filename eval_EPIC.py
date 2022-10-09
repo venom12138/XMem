@@ -86,11 +86,11 @@ Data preparation
 """
 out_path = args.output
 
-if os.path.exists(f'{out_path}/global_results-val.csv'):
-    os.remove(f'{out_path}/global_results-val.csv')
+# if os.path.exists(f'{out_path}/global_results-val.csv'):
+#     os.remove(f'{out_path}/global_results-val.csv')
 
-if os.path.exists(f'{out_path}/per-sequence_results-val.csv'):
-    os.remove(f'{out_path}/per-sequence_results-val.csv')
+# if os.path.exists(f'{out_path}/per-sequence_results-val.csv'):
+#     os.remove(f'{out_path}/per-sequence_results-val.csv')
 
 print(out_path)
 use_flow = args.use_flow
@@ -102,7 +102,7 @@ if args.use_text == 0:
     print('not use text !!!!!!')
 
 dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
-val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
+val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=10)
 torch.autograd.set_grad_enabled(False)
 
 # Load our checkpoint

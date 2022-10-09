@@ -15,12 +15,12 @@ import matplotlib.pyplot as plt
 class ExpHandler:
     _home = Path.home()
 
-    def __init__(self, en_wandb=False, resume=''):
+    def __init__(self, config=None, en_wandb=False, resume=''):
         exp_name = os.getenv('exp_name', default='default_group')
         run_name = os.getenv('run_name', default='default_name')
         self._exp_id = f'{self._get_exp_id()}_{run_name}'
         self._exp_name = exp_name
-        
+        self._run_name = run_name
         
         if resume != '' and (Path(resume) / 'config.yaml').exists():
             print('----------resuming-----------')
@@ -28,8 +28,10 @@ class ExpHandler:
             with open(self._save_dir / 'config.yaml', 'r') as f:
                 config = yaml.safe_load(f)
             self._exp_id = config['exp_id']
+            self._exp_name = config['exp_name']
+            self._run_name = config['run_name']
             if en_wandb:
-                self.wandb_run = wandb.init(group=exp_name, name=run_name, save_code=True,
+                self.wandb_run = wandb.init(group=self._exp_name, name=self._run_name, save_code=True,
                                             id=config['wandb_id'], resume='allow')
         else:
             self._save_dir = os.path.join('{}/.exp/{}'.format(self._home, os.getenv('WANDB_PROJECT', default='default_project')),
@@ -40,8 +42,9 @@ class ExpHandler:
                 self.wandb_run = wandb.init(group=exp_name, name=run_name, settings=wandb.Settings(start_method="fork"), save_code=True)
                 test_step = wandb.define_metric('test_step')
                 wandb.define_metric(name='eval/eval_acc', step_metric=test_step)
+            self.save_config(config)
         sym_dest = self._get_sym_path('N')
-        os.symlink(self._save_dir, sym_dest)
+        # os.symlink(self._save_dir, sym_dest)
 
         self._logger = self._init_logger()
         self._en_wandb = en_wandb
@@ -106,6 +109,8 @@ class ExpHandler:
     def save_config(self, conf):
         # conf = vars(args)
         conf['exp_id'] = self._exp_id
+        conf['exp_name'] = self._exp_name
+        conf['run_name'] = self._run_name
         conf['commit'] = os.getenv('commit', default='not_set')
         conf['run_id'] = self._exp_id.split('_')[0]
         if hasattr(self, 'wandb_run'):
@@ -142,7 +147,7 @@ class ExpHandler:
         os.rename(self._get_sym_path('N'), self._get_sym_path('Y'))
 
 # selected_pics_info: {video_key: {gt_path:[gt, gt,...], rgb_path:[rgb, rgb, ...], pred_path: [pred1, pred2, ...]}}
-def pair_pics_together(selected_pics_info):
+def once_pair_pics_together(selected_pics_info):
     h, w = [456, 256]
     
     cate_counts = len(selected_pics_info[list(selected_pics_info.keys())[0]].keys()) # mask RGB pred ...图片的类数，有多少行

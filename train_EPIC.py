@@ -23,6 +23,7 @@ import pathlib
 from visualize.visualize_eval_result_eps import visualize_eval_result
 import wandb
 from glob import glob
+import shutil
 
 # 从测试集的每一个video中随即选取一张mask，然后把每一个iter预测的这张mask都存下来，可视化结果
 def get_eval_pics(yaml_root, output_path, val_data_path, iterations):
@@ -34,7 +35,11 @@ def get_eval_pics(yaml_root, output_path, val_data_path, iterations):
         video_id = '_'.join(key.split('_')[:2])
         anno_path = f'{val_data_path}/{partition}/anno_masks/{video_id}/{key}'
         anno_pics = [pic.split('/')[-1] for pic in sorted(glob(f'{anno_path}/*.png'))[1:]] # [frame_0000xxx.png]
-        selected_pic = random.choice(anno_pics)
+        try:
+            selected_pic = random.choice(anno_pics)
+        except:
+            print(f'video {anno_path} has no mask:{anno_pics}')
+            raise NotImplementedError
         pred_masks = []
         for it in iterations:
             eval_it_path = f'{output_path}/eval_{it}'
@@ -56,6 +61,7 @@ def get_EPIC_parser():
     parser.add_argument('--epic_root', help='EPIC data root', default='./EPIC_train') # TODO
     parser.add_argument('--val_data_root', help='EPIC val data root', default='./val_data') # TODO
     parser.add_argument('--yaml_root', help='yaml root', default='./EPIC_train/EPIC100_state_positive_train.yaml')
+    parser.add_argument('--val_yaml_root', help='yaml root', default='./val_data/EPIC100_state_positive_val.yaml')
     parser.add_argument('--num_workers', help='Total number of dataloader workers across all GPUs processes', type=int, default=16)
 
     parser.add_argument('--key_dim', default=64, type=int)
@@ -158,9 +164,9 @@ Model related
 """
 if local_rank == 0:    
     # exp_handler
-    exp = ExpHandler(en_wandb=config['en_wandb'], resume=config['resume'])
-    exp.save_config(config)
-    wandb.define_metric('eval_step')
+    exp = ExpHandler(config=config, en_wandb=config['en_wandb'], resume=config['resume'])
+    # exp.save_config(config)
+    # wandb.define_metric('eval_step')
     # Construct the rank 0 model
     model = XMemTrainer(config, logger=exp, 
                     save_path=exp._save_dir, 
@@ -297,32 +303,50 @@ if local_rank == 0 and exp is not None:
     eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
     if total_iter != eval_iters[-1]:
         eval_iters.append(total_iter)
-        
-    for iteration in eval_iters:
-        exp_name = os.getenv('exp_name', default='default_group')
-        home = pathlib.Path.home()
-        wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
+    home = pathlib.Path.home()
+    wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
+    exp_name = exp._exp_name
+    selected_pics = get_eval_pics(yaml_root=config['val_yaml_root'], 
+                            output_path=f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}',
+                            val_data_path=config['val_data_root'],
+                            iterations=eval_iters)
+    
+    for i in range(len(eval_iters)):
+        iteration = eval_iters[i]
         model_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/network_{iteration}.pth'
         if not os.path.exists(model_path):
             print(f'Model not found: {model_path}')
             continue
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
-        os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])}')
+        if not os.path.exists(f'{output_path}/global_results-val.csv'):
+            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])}')
         os.chdir('./XMem_evaluation')
         os.system(f'python evaluation_method.py --results_path "{output_path}"')
         os.chdir('..')
+        
+        temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
         # log eval pictures
+        for key, value in selected_pics.items():
+            pred_path = value['pred_path'][i]
+            partition = key.split('_')[0]
+            video_id = '_'.join(key.split('_')[:2])
+            os.makedirs(f'{temp_save_path}/{partition}/{video_id}/{key}', exist_ok=True)
+            shutil.copy(pred_path, f'{temp_save_path}/{partition}/{video_id}/{key}')
+            selected_pics[key]['pred_path'][i] = f'{temp_save_path}/{partition}/{video_id}/{key}/{pred_path.split("/")[-1]}'
+        
+        try:
+            os.system(f'zip -qru {output_path}/masks.zip {output_path}/')
+            os.system(f'rm -r {output_path}/P*')
+            os.system(f'rm -r "{output_path}/draw"')
+        except:
+            pass
         
     run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
     iters, JF_list = visualize_eval_result(run_dir)
     for i in range(len(iters)):
         exp.log_eval_acc(JF_list[i], iters[i])
     
-    selected_pics = get_eval_pics(yaml_root=config['yaml_root'], 
-                            output_path=f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}',
-                            val_data_path=config['val_data_root'],
-                            iterations=eval_iters)
     output_imgs = pair_pics_together(selected_pics)
     for img in output_imgs:
         # print(sys.getsizeof(img))
@@ -336,10 +360,11 @@ if local_rank == 0 and exp is not None:
         exp_name = os.getenv('exp_name', default='default_group')
         home = pathlib.Path.home()
         wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
-        output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
-        os.system(f'zip -qru {output_path}/masks.zip {output_path}/')
-        os.system(f'rm -r {output_path}/P*')
-        os.system(f'rm -r "{output_path}/draw"')
+        # output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
+        temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
+        os.system(f'zip -qru {output_path}/select_pics.zip {temp_save_path}/')
+        os.system(f'rm -r {temp_save_path}/')
+            # os.system(f'rm -r "{output_path}/draw"')
     # exp.write
 # network_in_memory = model.XMem.module.state_dict()
 
