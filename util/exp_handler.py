@@ -21,7 +21,7 @@ class ExpHandler:
         self._exp_id = f'{self._get_exp_id()}_{run_name}'
         self._exp_name = exp_name
         self._run_name = run_name
-        
+        self._en_wandb = en_wandb
         if resume != '' and (Path(resume) / 'config.yaml').exists():
             print('----------resuming-----------')
             self._save_dir = Path(resume)
@@ -47,7 +47,7 @@ class ExpHandler:
         # os.symlink(self._save_dir, sym_dest)
 
         self._logger = self._init_logger()
-        self._en_wandb = en_wandb
+        
 
     def log_eval_acc(self, acc, step):
         if self._en_wandb:

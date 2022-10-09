@@ -31,8 +31,8 @@ class XMem(nn.Module):
         print(f'Single object mode: {self.single_object}')
 
         self.key_encoder = KeyEncoder() # R50 前三个stage: 
-        self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)
-        
+        self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)            
+            
         if config['use_text']:
             clip_model,_ = clip.load("ViT-L/14@336px") # clip.load("ViT-L/14@336px")
             self.clip_text_encoder = nn.Module()

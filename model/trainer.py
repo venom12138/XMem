@@ -16,7 +16,7 @@ import datetime
 sys.path.append('/home/venom/projects/XMem/')
 # from model.losses import LossComputer
 # from network import XMem
-
+from copy import deepcopy
 from util.log_integrator import Integrator
 from util.image_saver import pool_pairs
 from util.configuration import Configuration
@@ -28,6 +28,26 @@ import matplotlib.pyplot as plt
 import wandb
 import clip
 
+class EMA():
+    def __init__(self, beta):
+        super().__init__()
+        self.beta = beta
+        self.count = 0
+    def update_average(self, old, new):
+        if old is None:
+            return new
+        return old * self.beta + (1 - self.beta) * new
+    
+    def step(self,):
+        self.count += 1
+        # self.beta = 
+        
+def update_moving_average(ema_updater, ma_model, current_model):
+    # print('ema')
+    for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
+        old_weight, up_weight = ma_params.data, current_params.data
+        ma_params.data = ema_updater.update_average(old_weight, up_weight)
+
 # import resnet
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
@@ -37,13 +57,23 @@ class XMemTrainer:
         self.deep_update_prob = config['deep_update_prob']
         self.local_rank = local_rank
         try:
+            network = XMem(config)
             self.XMem = nn.parallel.DistributedDataParallel(
-                XMem(config).cuda(), 
+                network.cuda(), 
                 device_ids=[local_rank], output_device=local_rank, 
                 broadcast_buffers=False, find_unused_parameters=True)
+            if config['use_teacher_model']:
+                self.teacher_model = nn.parallel.DistributedDataParallel(
+                        deepcopy(network).cuda(), 
+                        device_ids=[local_rank], output_device=local_rank, 
+                        broadcast_buffers=False, find_unused_parameters=True)
         except:
+            network = XMem(config)
             self.XMem = nn.parallel.DataParallel(
-                XMem(config).cuda())
+                network.cuda())
+            if config['use_teacher_model']:
+                self.teacher_model = nn.parallel.DataParallel(
+                        deepcopy(network).cuda())
         
         # Set up logger when local_rank = 0
         self.logger = logger
@@ -60,6 +90,13 @@ class XMemTrainer:
             # freeze CLIP text encoder
             for param in self.XMem.module.clip_text_encoder.parameters():
                 param.requires_grad = False
+        
+        if config['use_teacher_model']:
+            self.ema_updater = EMA(config['moving_average_decay'])
+            for param in self.teacher_model.parameters():
+                param.requires_grad = False
+        else:
+            self.ema_updater = None
         
         # [TODO]: freeze key encoder 和 value encoder
         if self.config['freeze'] == 1:
@@ -137,15 +174,26 @@ class XMemTrainer:
                 text = clip.tokenize(text).cuda()
                 # [B, 256]
                 text_feat = self.XMem.module.encode_text(text)
+                if self.config['use_teacher_model']:
+                    t_text_feat = self.teacher_model.module.encode_text(text)
 
             # 正常的attention是query和key做内积，找出interest的区域，这里因为是frame - frame的对应，
             # 所以qk和mk的内积充当了key的角色，qe selection充当了query的角色
             key, shrinkage, selection, f16, f8, f4 = self.XMem('encode_key', frames)
+            
+            if self.config['use_teacher_model']:
+                t_key, t_shrinkage, t_selection, t_f16, t_f8, t_f4 = self.teacher_model('encode_key', frames)
+            
             if self.config['use_flow']:
                 flow_feats = self.XMem('encode_flow', flows) # B x num_frames x Cf x H/P x W/P; Cf =256
-
+                if self.config['use_teacher_model']:
+                    t_flow_feats = self.teacher_model('encode_flow', flows)
+            
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
+            
+            if self.config['use_teacher_model']:
+                t_hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *t_key.shape[-2:]))
             # first_frame_gt[:,0]:[b, max_num_obj, H, W]
             # hidden: [b, max_num_obj, hidden_dim, H, W]
             # f16[:,0]: [b, 1024, H//16, W//16]
@@ -154,6 +202,9 @@ class XMemTrainer:
             # v16:[b, max_obj_num, value_dim, H//16, W//16]
             # hidden:[b, max_obj_num, hidden_dim, H//16, W//16]
             v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, first_frame_gt[:,0])
+            if self.config['use_teacher_model']:
+                t_v16, t_hidden = self.teacher_model('encode_value', frames[:,0], t_f16[:,0], t_hidden, first_frame_gt[:,0])
+                t_values = t_v16.unsqueeze(3)
             # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
 
@@ -166,6 +217,11 @@ class XMemTrainer:
                     # 取前ti个frame的key作为ref_key
                     ref_keys = key[:,:,:ti]
                     ref_shrinkage = shrinkage[:,:,:ti] if shrinkage is not None else None
+                    if self.config['use_teacher_model']:
+                        t_ref_values = t_values
+                        # 取前ti个frame的key作为ref_key
+                        t_ref_keys = t_key[:,:,:ti]
+                        t_ref_shrinkage = t_shrinkage[:,:,:ti] if t_shrinkage is not None else None
                 else:
                     # pick num_ref_frames random frames
                     # this is not very efficient but I think we would 
@@ -186,6 +242,17 @@ class XMemTrainer:
                         shrinkage[bi, :, indices[bi]] for bi in range(b)
                     ], 0) if shrinkage is not None else None
 
+                    if self.config['use_teacher_model']:
+                        t_ref_values = torch.stack([
+                            t_values[bi, :, :, indices[bi]] for bi in range(b)
+                        ], 0)
+                        t_ref_keys = torch.stack([
+                            t_key[bi, :, indices[bi]] for bi in range(b)
+                        ], 0)
+                        t_ref_shrinkage = torch.stack([
+                            t_shrinkage[bi, :, indices[bi]] for bi in range(b)
+                        ], 0) if t_shrinkage is not None else None
+                        
                 # Segment frame ti, selection就是query_selection
                 # memory: B x max_obj_num x CV x H/P x W/P
                 # text_feat: [B, 256]
@@ -198,10 +265,20 @@ class XMemTrainer:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=None) # shape不变
                 elif self.config['use_text']:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
-                # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
-                #         hidden, selector, h_out=(ti < (self.num_frames-1)))
-                args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
-                kwargs = {'h_out':(ti < (self.num_frames-1))} # 最后一帧不进行update
+                
+                if self.config['use_teacher_model']:
+                    t_memory_readout = self.teacher_model('read_memory', t_key[:,:,ti], t_selection[:,:,ti] if t_selection is not None else None, 
+                                        t_ref_keys, t_ref_shrinkage, t_ref_values)
+                    if self.config['use_flow'] and self.config['use_text']:
+                        # flow_feats[:,ti]:B x Cf x H/P x W/P
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
+                    elif self.config['use_flow']:
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=None) # shape不变
+                    elif self.config['use_text']:
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=None, text_feat=t_text_feat) # shape不变
+                
+                # args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
+                # kwargs = {'h_out':(ti < (self.num_frames-1))} # 最后一帧不进行update
                 # logits:B,max_obj_num+1,H,W; 
                 # masks:B,max_obj_num,H,W
                 # hidden:B,max_obj_num,hidden_dim,H//16,W//16
@@ -209,14 +286,23 @@ class XMemTrainer:
                 hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), 
                                                 memory_readout, hidden, selector, (ti < (self.num_frames-1))) 
 
+                if self.config['use_teacher_model']:
+                    t_hidden, t_logits, t_masks = self.teacher_model('segment', (t_f16[:,ti], t_f8[:,ti], t_f4[:,ti]), 
+                                                t_memory_readout, t_hidden, selector, (ti < (self.num_frames-1))) 
                 # No need to encode the last frame
                 if ti < (self.num_frames-1):
                     is_deep_update = np.random.rand() < self.deep_update_prob # 50%的概率进行deep update
                     v16, hidden = self.XMem('encode_value', frames[:,ti], f16[:,ti], hidden, masks, is_deep_update=is_deep_update)
                     values = torch.cat([values, v16.unsqueeze(3)], 3) # 更新后的value用于下一帧，也就是每一帧的alue都是用的上一帧的
+                    if self.config['use_teacher_model']:
+                        t_v16, t_hidden = self.teacher_model('encode_value', frames[:,ti], t_f16[:,ti], t_hidden, t_masks, is_deep_update=is_deep_update)
+                        t_values = torch.cat([t_values, t_v16.unsqueeze(3)], 3) # 更新后的value用于下一帧，也就是每一帧的alue都是用的上一帧的
 
                 out[f'fmasks_{ti}'] = masks
                 out[f'flogits_{ti}'] = logits
+                if self.config['use_teacher_model']:
+                    out[f't_fmasks_{ti}'] = t_masks
+                    out[f't_flogits_{ti}'] = t_logits
 ###########################################################################################################
             # frames:[B,num_frames,C,H,W]
             # key:[B, key_dim, num_frames, H//16, W//16]
@@ -235,12 +321,24 @@ class XMemTrainer:
             f16 = torch.flip(f16, [1])
             f8 = torch.flip(f8, [1])
             f4 = torch.flip(f4, [1])
+            if self.config['use_teacher_model']:
+                t_key = torch.flip(t_key, [2])
+                t_shrinkage = torch.flip(t_shrinkage, [2]) if t_shrinkage is not None else None
+                t_selection = torch.flip(t_selection, [2]) if t_selection is not None else None
+                t_f16 = torch.flip(t_f16, [1])
+                t_f8 = torch.flip(t_f8, [1])
+                t_f4 = torch.flip(t_f4, [1])
+            
             if self.config['use_flow']:
                 flow_feats = torch.flip(flow_feats, [1])
+                if self.config['use_teacher_model']:
+                    t_flow_feats = torch.flip(t_flow_feats, [1])
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
-            # first_frame_gt[:,0]:[b, max_num_obj, H, W]
+            if self.config['use_teacher_model']:
+                t_hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *t_key.shape[-2:]))
+            # last_frame_gt[:,0]:[b, max_num_obj, H, W]
             # hidden: [b, max_num_obj, hidden_dim, H, W]
             # f16[:,0]: [b, 1024, H//16, W//16]
             # frames[:,0]: [b, 3, H, W]
@@ -249,6 +347,9 @@ class XMemTrainer:
             # hidden:[b, max_obj_num, hidden_dim, H//16, W//16]
             # frames是用最后一个
             v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, last_frame_gt[:,0])
+            if self.config['use_teacher_model']:
+                t_v16, t_hidden = self.teacher_model('encode_value', frames[:,0], t_f16[:,0], t_hidden, last_frame_gt[:,0])
+                t_values = t_v16.unsqueeze(3) # t_values
             # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
             # backward video
@@ -260,6 +361,11 @@ class XMemTrainer:
                     # 取前ti个frame的key作为ref_key
                     ref_keys = key[:,:,:ti]
                     ref_shrinkage = shrinkage[:,:,:ti] if shrinkage is not None else None
+                    if self.config['use_teacher_model']:
+                        t_ref_values = t_values
+                        # 取前ti个frame的key作为ref_key
+                        t_ref_keys = t_key[:,:,:ti]
+                        t_ref_shrinkage = t_shrinkage[:,:,:ti] if t_shrinkage is not None else None
                 else:
                     # pick num_ref_frames random frames
                     # this is not very efficient but I think we would 
@@ -279,6 +385,17 @@ class XMemTrainer:
                     ref_shrinkage = torch.stack([
                         shrinkage[bi, :, indices[bi]] for bi in range(b)
                     ], 0) if shrinkage is not None else None
+                    
+                    if self.config['use_teacher_model']:
+                        t_ref_values = torch.stack([
+                            t_values[bi, :, :, indices[bi]] for bi in range(b)
+                        ], 0)
+                        t_ref_keys = torch.stack([
+                            t_key[bi, :, indices[bi]] for bi in range(b)
+                        ], 0)
+                        t_ref_shrinkage = torch.stack([
+                            t_shrinkage[bi, :, indices[bi]] for bi in range(b)
+                        ], 0) if t_shrinkage is not None else None
 
                 # Segment frame ti, selection就是query_selection
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
@@ -290,24 +407,46 @@ class XMemTrainer:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=None) # shape不变
                 elif self.config['use_text']:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
+                
+                if self.config['use_teacher_model']:
+                    t_memory_readout = self.teacher_model('read_memory', t_key[:,:,ti], t_selection[:,:,ti] if t_selection is not None else None, 
+                                        t_ref_keys, t_ref_shrinkage, t_ref_values)
+                    if self.config['use_flow'] and self.config['use_text']:
+                        # flow_feats[:,ti]:B x Cf x H/P x W/P
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
+                    elif self.config['use_flow']:
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=None) # shape不变
+                    elif self.config['use_text']:
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=None, text_feat=t_text_feat) # shape不变
+                
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))
-                args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
-                kwargs = {'h_out':(ti < (self.num_frames-1))} # 最后一帧不进行update
+                # args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
+                # kwargs = {'h_out':(ti < (self.num_frames-1))} # 最后一帧不进行update
                 # logits:B,max_obj_num+1,H,W; 
                 # masks:B,max_obj_num,H,W
                 # hidden:B,max_obj_num,hidden_dim,H//16,W//16
                 hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), 
                                                 memory_readout, hidden, selector, (ti < (self.num_frames-1))) 
 
+                if self.config['use_teacher_model']:
+                    t_hidden, t_logits, t_masks = self.teacher_model('segment', (t_f16[:,ti], t_f8[:,ti], t_f4[:,ti]), 
+                                                t_memory_readout, t_hidden, selector, (ti < (self.num_frames-1))) 
+                    
                 # No need to encode the last frame
                 if ti < (self.num_frames-1):
                     is_deep_update = np.random.rand() < self.deep_update_prob # 50%的概率进行deep update
                     v16, hidden = self.XMem('encode_value', frames[:,ti], f16[:,ti], hidden, masks, is_deep_update=is_deep_update)
                     values = torch.cat([values, v16.unsqueeze(3)], 3) # 更新后的value用于下一帧，也就是每一帧的alue都是用的上一帧的
-
+                    if self.config['use_teacher_model']:
+                        t_v16, t_hidden = self.teacher_model('encode_value', frames[:,ti], t_f16[:,ti], t_hidden, t_masks, is_deep_update=is_deep_update)
+                        t_values = torch.cat([t_values, t_v16.unsqueeze(3)], 3) # 更新后的value用于下一帧，也就是每一帧的alue都是用的上一帧的
                 out[f'bmasks_{self.num_frames-ti-1}'] = masks # [b, max_obj_num, H, W]
                 out[f'blogits_{self.num_frames-ti-1}'] = logits # [b, max_obj_num+1, H, W]还有background
+                if self.config['use_teacher_model']:
+                    out[f't_bmasks_{self.num_frames-ti-1}'] = t_masks
+                    out[f't_blogits_{self.num_frames-ti-1}'] = t_logits
+            
             # out[f'fmasks_0'] = first_frame_gt
             # out[f'bmasks_{self.num_frames-1}'] = last_frame_gt
             # blogits:0，1，2，...，num_frames-2
@@ -325,7 +464,7 @@ class XMemTrainer:
                             if self.logger is not None:
                                 images = {**data, **out}
                                 size = (384, 384)
-                                masks = pool_pairs(images, size, num_filled_objects)
+                                masks = pool_pairs(images, size, num_filled_objects, use_teacher=self.config['use_teacher_model'])
                                 # TODO: wandb add image logging
                                 self.logger.log_image(masks)
                                 
@@ -382,8 +521,9 @@ class XMemTrainer:
             self.optimizer.step()
         # print('scheduler.step()')
         self.scheduler.step()
+        if self.config['use_teacher_model']:
+            update_moving_average(self.ema_updater, self.teacher_model, self.XMem)
         
-
     def save_network(self, it):
         if self.save_path is None:
             print('Saving has been disabled.')

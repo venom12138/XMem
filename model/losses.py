@@ -147,7 +147,7 @@ class LossComputer:
                 
 
             losses['total_loss'] += losses['ce_loss_%d'%ti]
-            # TODO: 中间帧做dice loss
+            
             if ti == 0:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'bmasks_{ti}'], data['cls_gt'][:,0,0]) # dice loss评估相似性 X交Y/X+Y
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
@@ -161,5 +161,12 @@ class LossComputer:
                     else:
                         losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f'flogits_{ti}'].detach())
                     losses['total_loss'] += losses[f'dice_loss_{ti}']
-
+                if self.config['use_teacher_model']:
+                    losses[f'sftf_dice_loss_{ti}'] = dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_flogits_{ti}'].detach())
+                    losses[f'sbtb_dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_blogits_{ti}'].detach())
+                    losses['total_loss'] += losses[f'sftf_dice_loss_{ti}'] + losses[f'sbtb_dice_loss_{ti}']
+                    if self.config['ts_all_align_loss']:
+                        losses[f'sftb_dice_loss_{ti}'] = dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_blogits_{ti}'].detach())
+                        losses[f'sbtf_dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_flogits_{ti}'].detach())
+                        losses['total_loss'] += losses[f'sftb_dice_loss_{ti}'] + losses[f'sbtf_dice_loss_{ti}']
         return losses

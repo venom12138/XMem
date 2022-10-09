@@ -17,16 +17,17 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
-def get_EPIC_parser():
-    parser = ArgumentParser()
-    parser.add_argument('--resume', default='', type=str,
-                    help='path to latest checkpoint (default: none)')
-    args = parser.parse_args()
-    return vars(args)
+# def get_EPIC_parser():
+#     parser = ArgumentParser()
+#     parser.add_argument('--resume', default='', type=str,
+#                     help='path to latest checkpoint (default: none)')
+#     args = parser.parse_args()
+#     return vars(args)
 
-config = get_EPIC_parser()
-print(Path(config['resume']))
-
+# config = get_EPIC_parser()
+# print(Path(config['resume']))
+sd = torch.load('/home/venom/.exp/0925_state_change_segm/debug/Y0057_lr=1e-5/network_3.pth')
+print(sd.keys())
 # img = cv2.imread('/cluster/home2/yjw/venom/XMem/data/P01/myflow_frames/P01_01/37/u/frame_0000007029.jpg')
 
 # img0 = np.array(cv2.imread('/cluster/home2/yjw/venom/XMem/data/P01/positive_frames/P01_01/37/frame_0000007034.jpg'), dtype =np.int32)

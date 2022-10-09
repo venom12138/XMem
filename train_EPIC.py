@@ -110,6 +110,10 @@ def get_EPIC_parser():
     parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
     parser.add_argument('--use_text', action='store_true')
+    parser.add_argument('--moving_average_decay', default=0.99, type=float)
+    parser.add_argument('--use_teacher_model', action='store_true')
+    # f with fb, b with fb
+    parser.add_argument('--ts_all_align_loss', action='store_true')
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
@@ -301,7 +305,7 @@ del model
 if local_rank == 0 and exp is not None:
     eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
     eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
-    if total_iter != eval_iters[-1] and total_iter>eval_iter[-1]:
+    if total_iter != eval_iters[-1] and total_iter>eval_iters[-1]:
         eval_iters.append(total_iter)
     home = pathlib.Path.home()
     wandb_project = os.getenv('WANDB_PROJECT', default='default_project')

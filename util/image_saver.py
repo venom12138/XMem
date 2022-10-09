@@ -133,7 +133,7 @@ def mask_transform(mask, size):
 def out_transform(mask, size):
     return base_transform(detach_to_cpu(torch.sigmoid(mask)), size=size)
 
-def pool_pairs(images, size, num_objects):
+def pool_pairs(images, size, num_objects, use_teacher):
     req_images = defaultdict(list)
 
     b, t = images['rgb'].shape[:2]
@@ -155,14 +155,21 @@ def pool_pairs(images, size, num_objects):
                 if ti == 0 or oi >= num_objects[bi]:
                     req_images['Mask_%d'%oi].append(mask_transform(images['first_last_frame_gt'][bi][0,oi], size))
                     req_images[f'bMask_{oi}'].append(mask_transform(images['bmasks_%d'%ti][bi][oi], size))
+                    if use_teacher:
+                        req_images[f't_bMask_{oi}'].append(mask_transform(images['t_bmasks_%d'%ti][bi][oi], size))
                     # req_images['Mask_X8_%d'%oi].append(mask_transform(images['first_frame_gt'][bi][0,oi], size))
                     # req_images['Mask_X16_%d'%oi].append(mask_transform(images['first_frame_gt'][bi][0,oi], size))
                 elif ti == t - 1:
                     req_images['Mask_%d'%oi].append(mask_transform(images['first_last_frame_gt'][bi][1,oi], size))
                     req_images[f'fMask_{oi}'].append(mask_transform(images['fmasks_%d'%ti][bi][oi], size))
+                    if use_teacher:
+                        req_images[f't_fMask_{oi}'].append(mask_transform(images['t_fmasks_%d'%ti][bi][oi], size))
                 else:
                     req_images[f'fMask_{oi}'].append(mask_transform(images['fmasks_%d'%ti][bi][oi], size))
                     req_images[f'bMask_{oi}'].append(mask_transform(images['bmasks_%d'%ti][bi][oi], size))
+                    if use_teacher:
+                        req_images[f't_fMask_{oi}'].append(mask_transform(images['t_fmasks_%d'%ti][bi][oi], size))
+                        req_images[f't_bMask_{oi}'].append(mask_transform(images['t_bmasks_%d'%ti][bi][oi], size))
                     # req_images['Mask_%d'%oi].append(mask_transform(images['masks_%d'%ti][bi][oi][2], size))
                     # req_images['Mask_X8_%d'%oi].append(mask_transform(images['masks_%d'%ti][bi][oi][1], size))
                     # req_images['Mask_X16_%d'%oi].append(mask_transform(images['masks_%d'%ti][bi][oi][0], size))
