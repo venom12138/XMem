@@ -112,8 +112,11 @@ def get_EPIC_parser():
     parser.add_argument('--use_text', action='store_true')
     parser.add_argument('--moving_average_decay', default=0.99, type=float)
     parser.add_argument('--use_teacher_model', action='store_true')
+    # teacher warmup之前 就正常的训练
+    parser.add_argument('--teacher_warmup', default=100, type=int)
     # f with fb, b with fb
     parser.add_argument('--ts_all_align_loss', action='store_true')
+    parser.add_argument('--teacher_loss_weight', default=0.1, type=int)
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
@@ -157,7 +160,7 @@ print(f'We are now starting stage EPIC')
 if config['debug']:
     config['batch_size'] = 2
     config['num_frames'] = 3
-    config['iterations'] = 3
+    config['iterations'] = 5
     config['finetune'] = 0
     config['log_text_interval'] = config['log_image_interval'] = 1
     config['save_network_interval'] = config['save_checkpoint_interval'] = 2

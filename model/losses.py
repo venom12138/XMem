@@ -161,12 +161,13 @@ class LossComputer:
                     else:
                         losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f'flogits_{ti}'].detach())
                     losses['total_loss'] += losses[f'dice_loss_{ti}']
-                if self.config['use_teacher_model']:
-                    losses[f'sftf_dice_loss_{ti}'] = dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_flogits_{ti}'].detach())
-                    losses[f'sbtb_dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_blogits_{ti}'].detach())
-                    losses['total_loss'] += losses[f'sftf_dice_loss_{ti}'] + losses[f'sbtb_dice_loss_{ti}']
-                    if self.config['ts_all_align_loss']:
-                        losses[f'sftb_dice_loss_{ti}'] = dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_blogits_{ti}'].detach())
-                        losses[f'sbtf_dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_flogits_{ti}'].detach())
-                        losses['total_loss'] += losses[f'sftb_dice_loss_{ti}'] + losses[f'sbtf_dice_loss_{ti}']
+                if it >= self.config['teacher_warmup']:
+                    if self.config['use_teacher_model']:
+                        losses[f'sftf_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_flogits_{ti}'].detach())
+                        losses[f'sbtb_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_blogits_{ti}'].detach())
+                        losses['total_loss'] += losses[f'sftf_dice_loss_{ti}'] + losses[f'sbtb_dice_loss_{ti}']
+                        if self.config['ts_all_align_loss']:
+                            losses[f'sftb_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_blogits_{ti}'].detach())
+                            losses[f'sbtf_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_flogits_{ti}'].detach())
+                            losses['total_loss'] += losses[f'sftb_dice_loss_{ti}'] + losses[f'sbtf_dice_loss_{ti}']
         return losses

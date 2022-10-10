@@ -29,26 +29,30 @@ import wandb
 import clip
 
 class EMA():
-    def __init__(self, beta):
+    def __init__(self, beta, iterations):
         super().__init__()
         self.beta = beta
         self.count = 0
+        self.beta_base = beta
+        self.count = 0
+        self.total_counts = iterations
+        
     def update_average(self, old, new):
         if old is None:
-            return new
+            return deepcopy(new)
         return old * self.beta + (1 - self.beta) * new
     
     def step(self,):
         self.count += 1
+        self.beta = 1 - (1-self.beta_base)*(np.cos(np.pi*self.count/self.total_counts) + 1)/2
         # self.beta = 
         
 def update_moving_average(ema_updater, ma_model, current_model):
-    # print('ema')
+    
     for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
         old_weight, up_weight = ma_params.data, current_params.data
         ma_params.data = ema_updater.update_average(old_weight, up_weight)
 
-# import resnet
 class XMemTrainer:
     def __init__(self, config, logger=None, save_path=None, local_rank=0, world_size=1):
         self.config = config
@@ -92,7 +96,7 @@ class XMemTrainer:
                 param.requires_grad = False
         
         if config['use_teacher_model']:
-            self.ema_updater = EMA(config['moving_average_decay'])
+            self.ema_updater = EMA(config['moving_average_decay'], config['iterations']+config['finetune'])
             for param in self.teacher_model.parameters():
                 param.requires_grad = False
         else:
@@ -134,6 +138,12 @@ class XMemTrainer:
         #     self.save_network_interval = self.save_checkpoint_interval = 1
 
     def do_pass(self, data, it=0):
+        # 开始使用teachermodel
+        if it == self.config['teacher_warmup']:
+            print('teacher start')
+            self.teacher_model = deepcopy(self.XMem)
+            for param in self.teacher_model.parameters():
+                param.requires_grad = False
         
         # No need to store the gradient outside training
         torch.set_grad_enabled(self._is_train)
@@ -492,7 +502,7 @@ class XMemTrainer:
                     train_metrics = self.train_integrator.finalize()
                     if self.logger is not None:
                         self.logger.write(prefix='train', train_metrics=train_metrics, **{'lr':self.scheduler.get_last_lr()[0],
-                                        'time':(time.time()-self.last_time)/self.log_text_interval})
+                                        'time':(time.time()-self.last_time)/self.log_text_interval, 'beta':self.ema_updater.beta if self.ema_updater is not None else 0.0})
                         all_dicts = {**train_metrics, **{'lr':self.scheduler.get_last_lr()[0],
                                             'time':(time.time()-self.last_time)/self.log_text_interval}}
                         self.last_time = time.time()
@@ -521,9 +531,11 @@ class XMemTrainer:
             self.optimizer.step()
         # print('scheduler.step()')
         self.scheduler.step()
-        if self.config['use_teacher_model']:
-            update_moving_average(self.ema_updater, self.teacher_model, self.XMem)
-        
+        if it >= self.config['teacher_warmup']:
+            if self.config['use_teacher_model']:
+                update_moving_average(self.ema_updater, self.teacher_model, self.XMem)
+                self.ema_updater.step()
+            
     def save_network(self, it):
         if self.save_path is None:
             print('Saving has been disabled.')
