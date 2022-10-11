@@ -101,7 +101,7 @@ def get_EPIC_parser():
     parser.add_argument('--use_flow', default=1, type=int, choices=[0,1])
     parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
 
-    # # Multiprocessing parameters, not set by users
+    # Multiprocessing parameters, not set by users
     parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
     parser.add_argument('--en_wandb', action='store_true')
     parser.add_argument('--use_dice_align', action='store_true')
@@ -110,13 +110,14 @@ def get_EPIC_parser():
     parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
     parser.add_argument('--use_text', action='store_true')
+    # teacher param
     parser.add_argument('--moving_average_decay', default=0.99, type=float)
     parser.add_argument('--use_teacher_model', action='store_true')
     # teacher warmup之前 就正常的训练
     parser.add_argument('--teacher_warmup', default=100, type=int)
     # f with fb, b with fb
     parser.add_argument('--ts_all_align_loss', action='store_true')
-    parser.add_argument('--teacher_loss_weight', default=0.1, type=int)
+    parser.add_argument('--teacher_loss_weight', default=0.1, type=float)
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
