@@ -345,9 +345,12 @@ if local_rank == 0 and exp is not None:
             selected_pics[key]['pred_path'][i] = f'{temp_save_path}/{partition}/{video_id}/{key}/{pred_path.split("/")[-1]}'
         
         try:
-            os.system(f'zip -qru {output_path}/masks.zip {output_path}/')
+            current_path = os.getcwd()
+            os.chdir(output_path)
+            os.system(f'zip -qru masks.zip ./')
             os.system(f'rm -r {output_path}/P*')
             os.system(f'rm -r "{output_path}/draw"')
+            os.chdir(current_path)
         except:
             pass
         

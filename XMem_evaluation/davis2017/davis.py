@@ -41,8 +41,13 @@ class DAVIS(object):
             video_id = '_'.join(seq.split('_')[:-1])
             masks_path = os.path.join(self.root, partition, 'anno_masks', video_id, seq)
             masks = np.sort(glob(f'{masks_path}/*.png')).tolist()
-            if len(masks) > 2:
-                self.sequences[seq]['masks'] = masks
+            if sequences == 'all':
+                if len(masks) > 2:
+                    self.sequences[seq]['masks'] = masks
+            elif sequences == 'second_half':
+                mask_len = len(masks)
+                if len(masks) > 2:
+                    self.sequences[seq]['masks'] = masks[max(int(mask_len//2)-1,0):]
 
     def _get_all_elements(self, sequence, obj_type):
         obj = np.array(Image.open(self.sequences[sequence][obj_type][0]).convert('1'))
