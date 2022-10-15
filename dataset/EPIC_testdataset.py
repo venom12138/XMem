@@ -58,12 +58,15 @@ class VideoReader(Dataset):
         # downsample the video
         self.frames = []
         for idx in range(len(frames)):
-            png_name = 'frame_' + str(frames[0]).zfill(10)+ '.png'
+            png_name = 'frame_' + str(frames[idx]).zfill(10)+ '.png'
             if not os.path.isfile(path.join(vid_gt_path, png_name)):
                 if idx % 5 == 0:
                     self.frames.append(frames[idx])
             else:
                 self.frames.append(frames[idx])
+        # print('video length:', len(self.frames))
+        # print(f'raw_length:{len(frames)}')
+        # dd
         
     def __getitem__(self, idx):
         info = {}
