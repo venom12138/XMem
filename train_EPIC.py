@@ -357,9 +357,9 @@ if local_rank == 0 and exp is not None:
             pass
         
     run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
-    iters, JF_list = visualize_eval_result(run_dir)
+    iters, JF_list, J_list, F_list = visualize_eval_result(run_dir)
     for i in range(len(iters)):
-        exp.log_eval_acc(JF_list[i], iters[i])
+        exp.log_eval_acc(JF_mean=JF_list[i], J_mean=J_list[i], F_mean=F_list[i], step=iters[i])
     
     output_imgs = pair_pics_together(selected_pics)
     for img in output_imgs:
