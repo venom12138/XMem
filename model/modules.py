@@ -225,7 +225,7 @@ class FlowEncoder(nn.Module):
         super(FlowEncoder, self).__init__()
         network = resnet.resnet18(pretrained=True)
         # flow的channels=2，其余的block使用预训练权重 
-        self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False) 
+        self.conv1 = nn.Conv2d(10, 64, kernel_size=7, stride=2, padding=3, bias=False) 
         self.bn1 = network.bn1
         self.relu = network.relu  # 1/2, 64
         self.maxpool = network.maxpool

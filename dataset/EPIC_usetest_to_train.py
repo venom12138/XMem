@@ -26,6 +26,7 @@ class EPICTestToTrainDataset(Dataset):
     - The distance between frames is controlled
     """
     def __init__(self, data_root, yaml_root, max_jump, num_frames=3, max_num_obj=3, finetune=False):
+        print('We are using EPIC TestToTrainDataset !!!!!')
         self.data_root = data_root
         self.max_jump = max_jump
         self.num_frames = num_frames

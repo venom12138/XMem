@@ -161,6 +161,7 @@ class XMemTrainer:
         text = [f"a photo of {t}" for t in text]
         # [b, 1, max_num_obj, H, W]
         first_frame_gt = data['first_last_frame_gt'][:,0].unsqueeze(1).float()
+        
         last_frame_gt = data['first_last_frame_gt'][:,1].unsqueeze(1).float()
         b = frames.shape[0]
         # data['info']['num_objects']: [], len=b, 每一个数代表每一个clip的object数量

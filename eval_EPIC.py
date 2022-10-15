@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import numpy as np
 from PIL import Image
-from dataset.EPIC_testdataset import EPICtestDataset
+from dataset.EPIC_testdataset import EPICtestDataset, VideoReader
 from inference.data.mask_mapper import MaskMapper
 from model.network import XMem
 from inference.inference_core import InferenceCore
@@ -101,8 +101,8 @@ if use_flow == False:
 if args.use_text == 0:
     print('not use text !!!!!!')
 
-dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
-val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=10)
+val_dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
+# val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
 torch.autograd.set_grad_enabled(False)
 
 # Load our checkpoint
@@ -118,9 +118,11 @@ total_process_time = 0
 total_frames = 0
 
 # Start eval
-for data in tqdm(val_loader):
-    vid_name = data['info']['name'][0]
-    vid_length = data['rgb'][0].shape[0]
+for this_vid in tqdm(val_dataset):
+    vid_reader = VideoReader(args.EPIC_path, this_vid)
+    vid_name = list(this_vid.keys())[0]
+    vid_value = this_vid[vid_name]
+    vid_length = len(vid_reader)
     # no need to count usage for LT if the video is not that long anyway
     # config['enable_long_term_count_usage'] = (
     #     config['enable_long_term'] and
@@ -137,37 +139,41 @@ for data in tqdm(val_loader):
     #     all_masks = data['whether_save_mask'][0][:].cpu().sum().item()
     #     second_half_start = all_masks // 2
     #     masks_to_now = 0
-    text = data['text']
-    text = [f"a photo of {t}" for t in text]
+    text = vid_value['narration']
+    text = [f"a photo of {text}"]
+    # print(text)
+    # print(f'text:{text}')
+    # print(f'video_value:{vid_value}')
     if config['use_text']:
         text = clip.tokenize(text).cuda()
         # [1, 256]
         text_feat = network.encode_text(text)
-    for ti in (range(vid_length)):
+        # print(text_feat.shape)
+    for ti, data in enumerate(vid_reader):
         with torch.cuda.amp.autocast(enabled=not args.benchmark):
             
-            whether_to_save_mask = int(data['whether_save_mask'][0][ti].cpu())
+            whether_to_save_mask = int(data['whether_save_mask'][0].cpu())
             # if config['only_test_second_half']:
             #     if whether_to_save_mask:
             #         masks_to_now += 1
             #         if masks_to_now <= second_half_start:
             #             whether_to_save_mask = 0
                     
-            rgb = data['rgb'][0][ti].cuda() # 3*H*W
-            flow = data['flow'][0][ti].cuda() # 2*H*W
+            rgb = data['rgb'][0].cuda() # 3*H*W
+            flow = data['flow'][0].cuda() # 10*H*W
             
             if ti == 0:
-                msk = data['first_frame_gt'][0][ti].cuda() # H*W
+                msk = data['first_frame_gt'][0].cuda() # 1*H*W
                 num_objects = msk.shape[0]
                 processor.set_all_labels(range(1, num_objects+1))
             else:
                 msk = None
             
-            frame = data['info']['frames'][ti][0]
-            shape = dataset.img_size # H*W
+            frame = data['info']['frames'][0]
+            shape = vid_reader.img_size # H*W
             
             need_resize = True
-            raw_rgb_path = data['info']['rgb_dir'][0] + '/' + frame
+            raw_rgb_path = data['info']['rgb_dir'] + '/' + frame
             raw_frame = np.array(Image.open(raw_rgb_path))
             
             start = torch.cuda.Event(enable_timing=True)
@@ -194,7 +200,9 @@ for data in tqdm(val_loader):
             #     processor.set_all_labels(list(mapper.remappings.values()))
             # else:
             #     labels = None
-
+            # print(f'frame:{rgb.shape}')
+            # print(f'flow:{flow.shape}')
+            # print(f'msk:{np.unique(msk.cpu())}')
             # Run the model on this frame
             if msk is not None:
                 if use_flow and config['use_text']:

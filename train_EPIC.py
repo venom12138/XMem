@@ -20,6 +20,8 @@ from util.load_subset import load_sub_davis, load_sub_yv
 from argparse import ArgumentParser
 from util.exp_handler import *
 import pathlib
+import sys
+sys.path.append('./visualize')
 from visualize.visualize_eval_result_eps import visualize_eval_result
 import wandb
 from glob import glob
@@ -216,8 +218,8 @@ def construct_loader(dataset):
 # BL 30K数据集
 def renew_epic_loader(max_skip, finetune=False):
     #TODO for debug
-    # train_dataset = EPICDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
-    train_dataset = EPICTestToTrainDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
+    train_dataset = EPICDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
+    # train_dataset = EPICTestToTrainDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
     print(f'EPIC dataset size: {len(train_dataset)}')
     print(f'Renewed with max_skip = {max_skip}')
 

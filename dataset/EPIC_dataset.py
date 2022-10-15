@@ -26,6 +26,7 @@ class EPICDataset(Dataset):
     - The distance between frames is controlled
     """
     def __init__(self, data_root, yaml_root, max_jump, num_frames=3, max_num_obj=3, finetune=False):
+        print('We are using EPIC Dataset !!!!!')
         self.data_root = data_root
         self.max_jump = max_jump
         self.num_frames = num_frames
@@ -158,7 +159,8 @@ class EPICDataset(Dataset):
                             break 
                         # raise ValueError(f"flow file not exist:{path.join(vid_flow_path, 'u', flow_name)}")
                 else:
-                    flow_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
+                    flow_idx = f_idx
+                    flow_name = 'frame_' + str(frames[flow_idx]).zfill(10)+ '.jpg'
                 info['frames'].append(jpg_name)
 
                 # 需要保证image、gt和flow做同样的变换，要不然mask就对不上了
@@ -167,30 +169,69 @@ class EPICDataset(Dataset):
                 this_im = self.all_im_dual_transform(this_im)
                 this_im = self.all_im_lone_transform(this_im)
 
-                reseed(sequence_seed)
-                this_flowu = Image.open(path.join(vid_flow_path, 'u', flow_name)).convert('P')
-                this_flowu = self.all_gt_dual_transform(this_flowu)
+                # aggregate flow
+                agg_u_frames = []
+                agg_v_frames = []
+                u_path = path.join(vid_flow_path, 'u')
+                v_path = path.join(vid_flow_path, 'v')
+                all_u_jpgs = sorted(glob(f'{u_path}/*.jpg'))
+                all_v_jpgs = sorted(glob(f'{v_path}/*.jpg'))
+                assert len(all_u_jpgs) > 5 and len(all_v_jpgs) > 5
+                u_idx = all_u_jpgs.index(path.join(vid_flow_path, 'u', flow_name))
+                v_idx = all_v_jpgs.index(path.join(vid_flow_path, 'v', flow_name))
+                if u_idx == 0 or u_idx == 1:
+                    agg_u_frames = all_u_jpgs[:5]
+                elif u_idx == len(all_u_jpgs) - 1 or u_idx == len(all_u_jpgs) - 2:
+                    agg_u_frames = all_u_jpgs[-5:]
+                else:
+                    agg_u_frames = all_u_jpgs[u_idx-2:u_idx+3]
+                
+                if v_idx == 0 or v_idx == 1:
+                    agg_v_frames = all_v_jpgs[:5]
+                elif v_idx == len(all_v_jpgs) - 1 or v_idx == len(all_v_jpgs) - 2:
+                    agg_v_frames = all_v_jpgs[-5:]
+                else:
+                    agg_v_frames = all_v_jpgs[v_idx-2:v_idx+3]
+                    
+                this_flow = None
+                pairwise_seed = np.random.randint(2147483647)
+                # process all flow frames
+                for tmp_idx in range(len(agg_u_frames)):
+                    reseed(sequence_seed)
+                    this_flowu = Image.open(agg_u_frames[tmp_idx]).convert('P')
+                    this_flowu = self.all_gt_dual_transform(this_flowu)
 
-                reseed(sequence_seed)
-                this_flowv = Image.open(path.join(vid_flow_path, 'v', flow_name)).convert('P')
-                this_flowv = self.all_gt_dual_transform(this_flowv)
+                    reseed(sequence_seed)
+                    this_flowv = Image.open(agg_v_frames[tmp_idx]).convert('P')
+                    this_flowv = self.all_gt_dual_transform(this_flowv)
+                    
+                    reseed(pairwise_seed)
+                    this_flowu = self.pair_gt_dual_transform(this_flowu)
 
+                    reseed(pairwise_seed)
+                    this_flowv = self.pair_gt_dual_transform(this_flowv)
+                    
+                    # 将0-255的像素值映射到0到1之间并中心化
+                    this_flowu = transforms.ToTensor()(this_flowu)
+                    this_flowv = transforms.ToTensor()(this_flowv)
+                    this_flowu = this_flowu - torch.mean(this_flowu)
+                    this_flowv = this_flowv - torch.mean(this_flowv)
+                    
+                    # this_flow 最后的shape是2*L x H x W
+                    if this_flow == None:
+                        this_flow = torch.cat([this_flowu, this_flowv], dim=0)
+                    else:
+                        this_flow = torch.cat([this_flow, this_flowu, this_flowv], dim=0)
+                    
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
                     reseed(sequence_seed)
                     this_gt = Image.open(path.join(vid_gt_path, png_name)).convert('1')
                     this_gt = self.all_gt_dual_transform(this_gt)
-                    
 
-                pairwise_seed = np.random.randint(2147483647)
+                
                 reseed(pairwise_seed)
                 this_im = self.pair_im_dual_transform(this_im)
                 this_im = self.pair_im_lone_transform(this_im)
-                
-                reseed(pairwise_seed)
-                this_flowu = self.pair_gt_dual_transform(this_flowu)
-
-                reseed(pairwise_seed)
-                this_flowv = self.pair_gt_dual_transform(this_flowv)
                 
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
                     reseed(pairwise_seed)
@@ -201,19 +242,12 @@ class EPICDataset(Dataset):
 
                 this_im = self.final_im_transform(this_im)
                 
-                # 将0-255的像素值映射到0到1之间并中心化
-                this_flowu = transforms.ToTensor()(this_flowu)
-                this_flowv = transforms.ToTensor()(this_flowv)
-                this_flowu = this_flowu - torch.mean(this_flowu)
-                this_flowv = this_flowv - torch.mean(this_flowv)
-                this_flow = torch.cat([this_flowu, this_flowv], dim=0)
-                
                 images.append(this_im)
                 flows.append(this_flow)
 
             images = torch.stack(images, 0)
             flows = torch.stack(flows, 0).float()
-
+            # print(f'flow:{flows.shape}')
             labels = np.unique(masks[0])
             # Remove background
             # mask的存储形式应该是，每一个pixel属于哪一类，0,1,2...，visualize的时候，每一个类给一个color就行了
@@ -270,7 +304,7 @@ class EPICDataset(Dataset):
         
         data = {
             'rgb': images, # [num_frames, 3, H, W]
-            'flow': flows, # [num_frames, 2, H, W]
+            'flow': flows, # [num_frames, 10, H, W]
             'first_last_frame_gt': first_last_frame_gt, # [2, max_num_obj, H, W] one hot
             'cls_gt': cls_gt, # [2, 1, H, W]
             'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
