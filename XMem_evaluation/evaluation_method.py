@@ -62,7 +62,7 @@ else:
         yaml_data = yaml.safe_load(f)
     
     seq_names = list(J['M_per_object'].keys())
-    print
+    
     plot_verb_chart(verb_class_csv_path='./EPIC_100_verb_classes.csv', 
                 yaml_path='../val_data/EPIC100_state_positive_val.yaml', output_path=args.results_path, J_dict=J)
     

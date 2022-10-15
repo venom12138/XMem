@@ -119,8 +119,14 @@ class EPICtestDataset(Dataset):
                     labels = np.unique(this_gt)
             else:
                 masks_count.append(0)
-
-            this_flow = torch.stack([torch.from_numpy(np.array(this_flowu)), torch.from_numpy(np.array(this_flowv))], dim=0)
+            
+            # 将0-255的像素值映射到0到1之间并中心化
+            this_flowu = transforms.ToTensor()(this_flowu)
+            this_flowv = transforms.ToTensor()(this_flowv)
+            this_flowu = this_flowu - torch.mean(this_flowu)
+            this_flowv = this_flowv - torch.mean(this_flowv)
+            this_flow = torch.cat([this_flowu, this_flowv], dim=0)
+            # this_flow = torch.stack([torch.from_numpy(np.array(this_flowu)), torch.from_numpy(np.array(this_flowv))], dim=0)
             
             images.append(this_im)
             flows.append(this_flow)
