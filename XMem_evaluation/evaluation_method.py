@@ -26,8 +26,8 @@ parser.add_argument('--results_path', type=str, help='Path to the folder contain
 parser.add_argument('--sequence_type', type=str, help='compute for all images or only for the second half images',
                     default='all', choices=['all', 'second_half']) # required=True, 
 args, _ = parser.parse_known_args()
-csv_name_global = f'global_results-{args.set}.csv'
-csv_name_per_sequence = f'per-sequence_results-{args.set}.csv'
+csv_name_global = f'{args.sequence_type}_global_results-{args.set}.csv'
+csv_name_per_sequence = f'{args.sequence_type}_per-sequence_results-{args.set}.csv'
 
 # Check if the method has been evaluated before, if so read the results, otherwise compute the results
 csv_name_global_path = os.path.join(args.results_path, csv_name_global)

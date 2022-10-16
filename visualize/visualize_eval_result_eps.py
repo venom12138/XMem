@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-def visualize_eval_result(run_dir):
+def visualize_eval_result(run_dir, seq_type='all'):
     # run_dir = '/u/ryanxli/.exp/0925_state_change_segm/0925_nf=8_bs=8/D0002_lr=1e-5,start_warm=2500,end_warm=15000'
     JF_list = []
     J_list = []
@@ -15,7 +15,7 @@ def visualize_eval_result(run_dir):
         else:
             continue
 
-        csv_path = os.path.join(eval_dir,'global_results-val.csv')
+        csv_path = os.path.join(eval_dir, f'{seq_type}_global_results-val.csv')
         df = pd.read_csv(csv_path)      
         iters.append(int(dir_name.split('_')[-1]))
         JF_list.append(df['J&F-Mean'][0])

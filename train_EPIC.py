@@ -79,7 +79,7 @@ def get_EPIC_parser():
     parser.add_argument('--batch_size', default=8, type=int)
     parser.add_argument('--iterations', default=5000, type=int)
     parser.add_argument('--finetune', default=0, type=int)
-    parser.add_argument('--steps', nargs="*", default=[1000,4000], type=int)
+    parser.add_argument('--steps', nargs="*", default=[1000,8000], type=int)
     parser.add_argument('--lr', help='Initial learning rate', default=1e-5, type=float)
     parser.add_argument('--num_ref_frames', default=3, type=int)
     parser.add_argument('--num_frames', default=5, type=int)
@@ -329,10 +329,11 @@ if local_rank == 0 and exp is not None:
             continue
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
-        if not os.path.exists(f'{output_path}/global_results-val.csv'):
+        if not os.path.exists(f'{output_path}/*global_results-val.csv'):
             os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])}')
             os.chdir('./XMem_evaluation')
             os.system(f'python evaluation_method.py --results_path "{output_path}"')
+            os.system(f'python evaluation_method.py --results_path "{output_path}" --sequence_type second_half')
             os.chdir('..')
             
         temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
@@ -357,9 +358,11 @@ if local_rank == 0 and exp is not None:
             pass
         
     run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
-    iters, JF_list, J_list, F_list = visualize_eval_result(run_dir)
+    iters, all_JF_list, all_J_list, all_F_list = visualize_eval_result(run_dir, seq_type='all')
+    _, half_JF_list, half_J_list, half_F_list = visualize_eval_result(run_dir, seq_type='second_half')
     for i in range(len(iters)):
-        exp.log_eval_acc(JF_mean=JF_list[i], J_mean=J_list[i], F_mean=F_list[i], step=iters[i])
+        exp.log_eval_acc(all_JF_mean=all_JF_list[i], all_J_mean=all_J_list[i], all_F_mean=all_F_list[i], 
+            half_JF_mean=half_JF_list[i], half_J_mean=half_J_list[i], half_F_mean=half_F_list[i], step=iters[i])
     
     output_imgs = pair_pics_together(selected_pics)
     for img in output_imgs:

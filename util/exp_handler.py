@@ -41,9 +41,12 @@ class ExpHandler:
             if en_wandb:
                 self.wandb_run = wandb.init(group=exp_name, name=run_name, settings=wandb.Settings(start_method="fork"), save_code=True)
                 test_step = wandb.define_metric('test_step')
-                wandb.define_metric(name='eval/JF_mean', step_metric=test_step)
-                wandb.define_metric(name='eval/J_mean', step_metric=test_step)
-                wandb.define_metric(name='eval/F_mean', step_metric=test_step)
+                wandb.define_metric(name='eval/all/JF_mean', step_metric=test_step)
+                wandb.define_metric(name='eval/all/J_mean', step_metric=test_step)
+                wandb.define_metric(name='eval/all/F_mean', step_metric=test_step)
+                wandb.define_metric(name='eval/half/JF_mean', step_metric=test_step)
+                wandb.define_metric(name='eval/half/J_mean', step_metric=test_step)
+                wandb.define_metric(name='eval/half/F_mean', step_metric=test_step)
             self.save_config(config)
         sym_dest = self._get_sym_path('N')
         # os.symlink(self._save_dir, sym_dest)
@@ -51,10 +54,13 @@ class ExpHandler:
         self._logger = self._init_logger()
         
 
-    def log_eval_acc(self, JF_mean, J_mean, F_mean, step):
+    def log_eval_acc(self, all_JF_mean, all_J_mean, all_F_mean, 
+            half_JF_mean, half_J_mean, half_F_mean, step):
         if self._en_wandb:
-            wandb.log({'test_step': step, 'eval/JF_mean': JF_mean, \
-                'eval/J_mean': J_mean, 'eval/F_mean': F_mean})
+            wandb.log({'test_step': step, 'eval/all/JF_mean': all_JF_mean, \
+                'eval/all/J_mean': all_J_mean, 'eval/all/F_mean': all_F_mean, \
+                'eval/half/JF_mean': half_JF_mean, 'eval/half/J_mean': half_J_mean, \
+                'eval/half/F_mean': half_F_mean})
             
     def log_image(self, images):
         image = wandb.Image(images, )
