@@ -90,24 +90,27 @@ class CrossAttentionValueFuser(nn.Module):
         self.reference_dimensionality_reduction = nn.Conv2d(
             x_in_dim, hidden_channels, kernel_size=1, stride=1, padding=0, bias=True
         )
+    
     # reference: memory_value: [b, max_obj_num, x_in_dim or value_dim, H//16, W//16]
     # query: flow_feat_16: [b, f_in_dim, H//16, W//16]
     # return: [b, max_obj_num, out_dim or value_dim, H//16, W//16]
     # query: flow; reference: memory_value
-    def forward(self, query_features, reference_features):
-        batch_size, num_objects = reference_features.shape[:2]
-        HbyP, WbyP = reference_features.shape[-2:]
-        if query_features != None:
-            query_features = query_features.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
-        
-        Q = self.query_dimensionality_reduction(query_features)
-        K = self.reference_dimensionality_reduction(reference_features)
-        V = rearrange(reference_features, "b c h w -> b c (h w)")
+    def forward(self, memory_value, flow_feat_16, text_feat=None):
+        assert text_feat == None
+        batch_size, num_objects = memory_value.shape[:2]
+        HbyP, WbyP = memory_value.shape[-2:]
+        flow_feat_16 = flow_feat_16.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
+        flow_feat_16 = flow_feat_16.flatten(start_dim=0, end_dim=1) # B*max_obj_num x f_in_dim x H//16 x W//16
+        memory_value = memory_value.flatten(start_dim=0, end_dim=1) # B*max_obj_num x x_in_dim x H//16 x W//16
+        Q = self.query_dimensionality_reduction(flow_feat_16)
+        K = self.reference_dimensionality_reduction(memory_value)
+        V = rearrange(memory_value, "b c h w -> b c (h w)")
         attention_map = torch.einsum("bcij,bckl->bijkl", Q, K)
         attention_map = rearrange(attention_map, "b h1 w1 h2 w2 -> b h1 w1 (h2 w2)")
         attention_map = nn.Softmax(dim=3)(attention_map)
         attended_features = torch.einsum("bijp,bcp->bcij", attention_map, V)
-        return attended_features
+        
+        return attended_features.view(batch_size, num_objects, *attended_features.shape[1:])
 
 class HiddenUpdater(nn.Module):
     # Used in the decoder, multi-scale feature + GRU

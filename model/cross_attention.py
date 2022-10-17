@@ -5,7 +5,7 @@ from einops import rearrange
 class CoAttentionModule(nn.Module):
     def __init__(self, input_channels=2048, hidden_channels=256, attention_type="coam"):
         super().__init__()
-        self.attention_layer = CoAttentionLayer(input_channels, hidden_channels)
+        self.attention_layer = CrossAttentionValueFuser(input_channels, hidden_channels)
 
     def forward(self, left_features, right_features):
         weighted_r = self.attention_layer(left_features, right_features)
@@ -40,15 +40,15 @@ class CrossAttentionValueFuser(nn.Module):
         return attended_features
 
 if __name__ == "__main__":
-    dummy_input = torch.randn(1, 3, 16, 16)
-    dummy_input2 = torch.randn(1, 5, 16, 16)
+    mv = torch.randn(1, 4, 3, 16, 16)
+    flow = torch.randn(1, 5, 16, 16)
     query_dimensionality_reduction = nn.Conv2d(
-            3, 64, kernel_size=1, stride=1, padding=0, bias=True
-        )
-    reference_dimensionality_reduction = nn.Conv2d(
             5, 64, kernel_size=1, stride=1, padding=0, bias=True
         )
-    # Q = query_dimensionality_reduction(dummy_input)
+    reference_dimensionality_reduction = nn.Conv2d(
+            3, 64, kernel_size=1, stride=1, padding=0, bias=True
+        )
+    # Q = query_dimensionality_reduction(mv)
     # K = reference_dimensionality_reduction(dummy_input2)
     # V = rearrange(dummy_input2, "b c h w -> b c (h w)")
     # print('V')
@@ -65,11 +65,13 @@ if __name__ == "__main__":
     # attended_features = torch.einsum("bijp,bcp->bcij", attention_map, V)
     
     # print(attended_features.shape)
-    batch_size, num_objects = dummy_input.shape[:2]
-    HbyP, WbyP = dummy_input.shape[-2:]
-    if dummy_input2 != None:
-        query_features = dummy_input2.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
+    batch_size, num_objects = mv.shape[:2]
+    HbyP, WbyP = mv.shape[-2:]
     
+    query_features = flow.unsqueeze(1).repeat(1, num_objects, 1, 1, 1).flatten(start_dim=0, end_dim=1) # B x max_obj_num x f_in_dim x H//16 x W//16
+    reference_features = mv.flatten(start_dim=0, end_dim=1)
+    print(query_features.shape)
+    print(reference_features.shape)
     Q = query_dimensionality_reduction(query_features)
     K = reference_dimensionality_reduction(reference_features)
     V = rearrange(reference_features, "b c h w -> b c (h w)")
@@ -77,3 +79,5 @@ if __name__ == "__main__":
     attention_map = rearrange(attention_map, "b h1 w1 h2 w2 -> b h1 w1 (h2 w2)")
     attention_map = nn.Softmax(dim=3)(attention_map)
     attended_features = torch.einsum("bijp,bcp->bcij", attention_map, V)
+    attended_features = attended_features.view(batch_size, num_objects, *attended_features.shape[1:])
+    print(attended_features.shape)
