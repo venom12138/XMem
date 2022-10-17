@@ -44,10 +44,14 @@ class DAVIS(object):
             if sequences == 'all':
                 if len(masks) > 2:
                     self.sequences[seq]['masks'] = masks
+                # else:
+                #     self.sequences[seq]['masks'] = masks
             elif sequences == 'second_half':
                 mask_len = len(masks)
                 if len(masks) > 2:
                     self.sequences[seq]['masks'] = masks[max(int(mask_len//2)-1,0):]
+                else:
+                    self.sequences[seq]['masks'] = masks
 
     def _get_all_elements(self, sequence, obj_type):
         obj = np.array(Image.open(self.sequences[sequence][obj_type][0]).convert('1'))

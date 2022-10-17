@@ -14,6 +14,8 @@ class Results(object):
             video_id = '_'.join(sequence.split('_')[:-1])
             
             mask_path = os.path.join(self.root_dir, partition, video_id, sequence, f'{frame_id}.png')
+            # print(mask_path)
+            # print('!!!!!!!!!!!!!!!!!!!11')
             if os.path.exists(mask_path):
                 return np.array(Image.open(mask_path).convert('1'))
             else:

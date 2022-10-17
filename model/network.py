@@ -49,12 +49,21 @@ class XMem(nn.Module):
         self.use_flow = config['use_flow']
         if self.use_text and self.use_flow:
             self.flow_encoder = FlowEncoder()
-            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=256, out_dim=self.value_dim)
+            if config['fuser_type'] == 'cbam':
+                self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=256, out_dim=self.value_dim)
+            elif config['fuser_type'] == 'cross_attention':
+                raise NotImplementedError
         elif self.use_flow:
             self.flow_encoder = FlowEncoder()
-            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=0, out_dim=self.value_dim)
+            if config['fuser_type'] == 'cbam':
+                self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=0, out_dim=self.value_dim)
+            elif config['fuser_type'] == 'cross_attention':
+                self.value_fuser = CrossAttentionValueFuser(x_in_dim=self.value_dim, f_in_dim=256)
         elif self.use_text:
-            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=0, t_in_dim=256, out_dim=self.value_dim)
+            if config['fuser_type'] == 'cbam':
+                self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=0, t_in_dim=256, out_dim=self.value_dim)
+            elif config['fuser_type'] == 'cross_attention':
+                raise NotImplementedError
         # Projection from f16 feature space to key/value space
         # indim:1024,即f16；outdim:key_dim
         self.key_proj = KeyProjection(1024, self.key_dim)

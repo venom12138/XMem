@@ -120,6 +120,8 @@ def get_EPIC_parser():
     # f with fb, b with fb
     parser.add_argument('--ts_all_align_loss', action='store_true')
     parser.add_argument('--teacher_loss_weight', default=0.1, type=float)
+    
+    parser.add_argument('--fuser_type', default='cross_attention', type=str, choices=['cbam','cross_attention'])
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
