@@ -97,8 +97,8 @@ class CrossAttentionValueFuser(nn.Module):
     def forward(self, query_features, reference_features):
         batch_size, num_objects = reference_features.shape[:2]
         HbyP, WbyP = reference_features.shape[-2:]
-        if flow_feat_16 != None:
-            flow_feat_16 = flow_feat_16.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
+        if query_features != None:
+            query_features = query_features.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
         
         Q = self.query_dimensionality_reduction(query_features)
         K = self.reference_dimensionality_reduction(reference_features)

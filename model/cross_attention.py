@@ -48,20 +48,32 @@ if __name__ == "__main__":
     reference_dimensionality_reduction = nn.Conv2d(
             5, 64, kernel_size=1, stride=1, padding=0, bias=True
         )
-    Q = query_dimensionality_reduction(dummy_input)
-    K = reference_dimensionality_reduction(dummy_input2)
-    V = rearrange(dummy_input2, "b c h w -> b c (h w)")
-    print('V')
-    print(V.shape)
-    attention_map = torch.einsum("bcij,bckl->bijkl", Q, K)
-    print('attention_map1')
-    print(attention_map.shape)
-    attention_map = rearrange(attention_map, "b h1 w1 h2 w2 -> b h1 w1 (h2 w2)")
-    print('attention_map2')
-    print(attention_map.shape)
-    attention_map = nn.Softmax(dim=3)(attention_map)
-    print('attention_map3')
-    print(attention_map.shape)
-    attended_features = torch.einsum("bijp,bcp->bcij", attention_map, V)
+    # Q = query_dimensionality_reduction(dummy_input)
+    # K = reference_dimensionality_reduction(dummy_input2)
+    # V = rearrange(dummy_input2, "b c h w -> b c (h w)")
+    # print('V')
+    # print(V.shape)
+    # attention_map = torch.einsum("bcij,bckl->bijkl", Q, K)
+    # print('attention_map1')
+    # print(attention_map.shape)
+    # attention_map = rearrange(attention_map, "b h1 w1 h2 w2 -> b h1 w1 (h2 w2)")
+    # print('attention_map2')
+    # print(attention_map.shape)
+    # attention_map = nn.Softmax(dim=3)(attention_map)
+    # print('attention_map3')
+    # print(attention_map.shape)
+    # attended_features = torch.einsum("bijp,bcp->bcij", attention_map, V)
     
-    print(attended_features.shape)
+    # print(attended_features.shape)
+    batch_size, num_objects = dummy_input.shape[:2]
+    HbyP, WbyP = dummy_input.shape[-2:]
+    if dummy_input2 != None:
+        query_features = dummy_input2.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16
+    
+    Q = query_dimensionality_reduction(query_features)
+    K = reference_dimensionality_reduction(reference_features)
+    V = rearrange(reference_features, "b c h w -> b c (h w)")
+    attention_map = torch.einsum("bcij,bckl->bijkl", Q, K)
+    attention_map = rearrange(attention_map, "b h1 w1 h2 w2 -> b h1 w1 (h2 w2)")
+    attention_map = nn.Softmax(dim=3)(attention_map)
+    attended_features = torch.einsum("bijp,bcp->bcij", attention_map, V)
