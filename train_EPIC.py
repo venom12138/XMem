@@ -374,7 +374,7 @@ if local_rank == 0 and exp is not None:
     
     # remove mask file to save space 
     for iteration in eval_iters:
-        exp_name = os.getenv('exp_name', default='default_group')
+        exp_name = exp._exp_name
         home = pathlib.Path.home()
         wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
