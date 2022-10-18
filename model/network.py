@@ -58,7 +58,7 @@ class XMem(nn.Module):
             if config['fuser_type'] == 'cbam':
                 self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=0, out_dim=self.value_dim)
             elif config['fuser_type'] == 'cross_attention':
-                self.value_fuser = CrossAttentionValueFuser(x_in_dim=self.value_dim, f_in_dim=256)
+                self.value_fuser = CrossAttentionValueFuser(x_in_dim=self.value_dim, f_in_dim=256, out_dim=self.value_dim)
         elif self.use_text:
             if config['fuser_type'] == 'cbam':
                 self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=0, t_in_dim=256, out_dim=self.value_dim)
