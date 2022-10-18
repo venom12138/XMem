@@ -332,7 +332,7 @@ if local_rank == 0 and exp is not None:
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
         if not os.path.exists(f'{output_path}/*global_results-val.csv'):
-            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])}')
+            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])} --fuser_type {config["fuser_type"]}')
             os.chdir('./XMem_evaluation')
             os.system(f'python evaluation_method.py --results_path "{output_path}"')
             os.system(f'python evaluation_method.py --results_path "{output_path}" --sequence_type second_half')
