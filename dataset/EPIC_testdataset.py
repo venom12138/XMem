@@ -83,22 +83,14 @@ class VideoReader(Dataset):
         images = []
         masks = []
         masks_count = [] # 标记是否当前帧是否有标注的annotation
-        flows = []
+        forward_flows = []
+        backward_flows = []
         # 至少一个target object
         info['num_objects'] = max(1, len(self.target_objects))
         f_idx = idx
         
         jpg_name = 'frame_' + str(self.frames[f_idx]).zfill(10)+ '.jpg'
         png_name = 'frame_' + str(self.frames[f_idx]).zfill(10)+ '.png'
-        #TODO
-        # if not os.path.isfile(path.join(vid_gt_path, png_name)):
-        #     if len(frames) > 1000:
-        #         if f_idx % 6 != 0:
-        #             continue
-        #     else:
-        #         if f_idx % 2 == 0:
-        #             continue
-        # pass
         if len(video_value['video_id'].split('_')[-1]) == 2:
             flow_name = 'frame_' + str(int(np.ceil((float(self.frames[f_idx]) - 3) / 2))).zfill(10)+ '.jpg'
         else:
@@ -135,23 +127,35 @@ class VideoReader(Dataset):
             agg_v_frames = all_v_jpgs[v_idx-2:v_idx+3]
             
         this_flow = None
+        this_backward_flow = None
         # process all flow frames
         for tmp_idx in range(len(agg_u_frames)):
             this_flowu = Image.open(agg_u_frames[tmp_idx]).convert('P').resize((384,384))
-
+            this_backward_u = Image.fromarray(255 - np.array(this_flowu), mode='P')
             this_flowv = Image.open(agg_v_frames[tmp_idx]).convert('P').resize((384,384))
-            
+            this_backward_v = Image.fromarray(255 - np.array(this_flowv), mode='P')
             # 将0-255的像素值映射到0到1之间并中心化
             this_flowu = transforms.ToTensor()(this_flowu)
             this_flowv = transforms.ToTensor()(this_flowv)
             this_flowu = this_flowu - torch.mean(this_flowu)
             this_flowv = this_flowv - torch.mean(this_flowv)
             
+            this_backward_u = transforms.ToTensor()(this_backward_u)
+            this_backward_v = transforms.ToTensor()(this_backward_v)
+            this_backward_u = this_backward_u - torch.mean(this_backward_u)
+            this_backward_v = this_backward_v - torch.mean(this_backward_v)
+            
             # this_flow 最后的shape是2*L x H x W
             if this_flow == None:
                 this_flow = torch.cat([this_flowu, this_flowv], dim=0)
             else:
                 this_flow = torch.cat([this_flow, this_flowu, this_flowv], dim=0)
+            
+            # this_backward_flow 最后的shape是2*L x H x W
+            if this_backward_flow == None:
+                this_backward_flow = torch.cat([this_backward_u, this_backward_v], dim=0)
+            else:
+                this_backward_flow = torch.cat([this_backward_flow, this_backward_u, this_backward_v], dim=0)
             
         if os.path.isfile(path.join(vid_gt_path, png_name)):
             masks_count.append(1)
@@ -165,13 +169,13 @@ class VideoReader(Dataset):
         else:
             masks_count.append(0)
         
-        # this_flow = torch.stack([torch.from_numpy(np.array(this_flowu)), torch.from_numpy(np.array(this_flowv))], dim=0)
-        
         images.append(this_im)
-        flows.append(this_flow)
+        forward_flows.append(this_flow)
+        backward_flows.append(this_backward_flow)
         
         images = torch.stack(images, 0)
-        flows = torch.stack(flows, 0).float()
+        forward_flows = torch.stack(forward_flows, 0).float()
+        backward_flows = torch.stack(backward_flows, 0).float()
         # print(f'flow:{flows.shape}')
         masks_count = torch.tensor(masks_count, dtype=torch.int)
         # Remove background
@@ -220,7 +224,8 @@ class VideoReader(Dataset):
         if f_idx == 0:
             data = {
                 'rgb': images, # [num_frames, 3, H, W]
-                'flow': flows, # [num_frames, 10, H, W]
+                'forward_flow': forward_flows, # [num_frames, 10, H, W]
+                'backward_flow': backward_flows, # [num_frames, 10, H, W]
                 'first_frame_gt': torch.tensor(first_frame_gt), # [1, target_objects, H, W] one hot
                 'cls_gt': torch.tensor(cls_gt), # [1, 1, H, W]
                 'selector': selector, # [target_objects] 前num_objects个是1，后面是0
@@ -231,7 +236,8 @@ class VideoReader(Dataset):
         else:
             data = {
                 'rgb': images, # [num_frames, 3, H, W]
-                'flow': flows, # [num_frames, 10, H, W]
+                'forward_flow': forward_flows, # [num_frames, 10, H, W]
+                'backward_flow': backward_flows, # [num_frames, 10, H, W]
                 'selector': selector, # [target_objects] 前num_objects个是1，后面是0
                 'info': info,
                 # 'text': video_value['narration'], deprecated

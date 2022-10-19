@@ -160,7 +160,7 @@ for this_vid in tqdm(val_dataset):
             #             whether_to_save_mask = 0
                     
             rgb = data['rgb'][0].cuda() # 3*H*W
-            flow = data['flow'][0].cuda() # 10*H*W
+            flow = data['forward_flow'][0].cuda() # 10*H*W
             
             if ti == 0:
                 msk = data['first_frame_gt'][0].cuda() # 1*H*W

@@ -156,7 +156,8 @@ class XMemTrainer:
         # [b, num_frames, 3, H, W]
         frames = data['rgb']
         # [b, num_frames, 2, H, W]
-        flows = data['flow']
+        forward_flows = data['forward_flow']
+        backward_flows = data['backward_flow']
         text = data['text']
         text = [f"a photo of {t}" for t in text]
         # [b, 1, max_num_obj, H, W]
@@ -196,9 +197,12 @@ class XMemTrainer:
                 t_key, t_shrinkage, t_selection, t_f16, t_f8, t_f4 = self.teacher_model('encode_key', frames)
             
             if self.config['use_flow']:
-                flow_feats = self.XMem('encode_flow', flows) # B x num_frames x Cf x H/P x W/P; Cf =256
+                forward_flow_feats = self.XMem('encode_flow', forward_flows) # B x num_frames x Cf x H/P x W/P; Cf =256
                 if self.config['use_teacher_model']:
-                    t_flow_feats = self.teacher_model('encode_flow', flows)
+                    t_forward_flow_feats = self.teacher_model('encode_flow', forward_flows)
+                backward_flow_feats = self.XMem('encode_flow', backward_flows) # B x num_frames x Cf x H/P x W/P; Cf =256
+                if self.config['use_teacher_model']:
+                    t_backward_flow_feats = self.teacher_model('encode_flow', backward_flows)
             
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
@@ -271,9 +275,9 @@ class XMemTrainer:
                                         ref_keys, ref_shrinkage, ref_values)
                 if self.config['use_flow'] and self.config['use_text']:
                     # flow_feats[:,ti]:B x Cf x H/P x W/P
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=text_feat) # shape不变
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=forward_flow_feats[:,ti], text_feat=text_feat) # shape不变
                 elif self.config['use_flow']:
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=None) # shape不变
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=forward_flow_feats[:,ti], text_feat=None) # shape不变
                 elif self.config['use_text']:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
                 
@@ -282,9 +286,9 @@ class XMemTrainer:
                                         t_ref_keys, t_ref_shrinkage, t_ref_values)
                     if self.config['use_flow'] and self.config['use_text']:
                         # flow_feats[:,ti]:B x Cf x H/P x W/P
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_forward_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
                     elif self.config['use_flow']:
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=None) # shape不变
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_forward_flow_feats[:,ti], text_feat=None) # shape不变
                     elif self.config['use_text']:
                         t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=None, text_feat=t_text_feat) # shape不变
                 
@@ -341,11 +345,9 @@ class XMemTrainer:
                 t_f4 = torch.flip(t_f4, [1])
             
             if self.config['use_flow']:
-                flow_feats = torch.flip(flow_feats, [1])
-                flow_feats = 255 - flow_feats
+                backward_flow_feats = torch.flip(backward_flow_feats, [1])
                 if self.config['use_teacher_model']:
-                    t_flow_feats = torch.flip(t_flow_feats, [1])
-                    t_flow_feats = 255 - t_flow_feats
+                    t_backward_flow_feats = torch.flip(t_backward_flow_feats, [1])
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
@@ -415,9 +417,9 @@ class XMemTrainer:
                                         ref_keys, ref_shrinkage, ref_values)
                 if self.config['use_flow'] and self.config['use_text']:
                     # flow_feats[:,ti]:B x Cf x H/P x W/P
-                    memory_readout = self.XMem('fuse_value', memory_readout, flow_feats[:,ti], text_feat) # shape不变
+                    memory_readout = self.XMem('fuse_value', memory_readout, backward_flow_feats[:,ti], text_feat) # shape不变
                 elif self.config['use_flow']:
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=flow_feats[:,ti], text_feat=None) # shape不变
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=backward_flow_feats[:,ti], text_feat=None) # shape不变
                 elif self.config['use_text']:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
                 
@@ -426,9 +428,9 @@ class XMemTrainer:
                                         t_ref_keys, t_ref_shrinkage, t_ref_values)
                     if self.config['use_flow'] and self.config['use_text']:
                         # flow_feats[:,ti]:B x Cf x H/P x W/P
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_backward_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
                     elif self.config['use_flow']:
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_flow_feats[:,ti], text_feat=None) # shape不变
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_backward_flow_feats[:,ti], text_feat=None) # shape不变
                     elif self.config['use_text']:
                         t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=None, text_feat=t_text_feat) # shape不变
                 

@@ -121,7 +121,8 @@ class EPICDataset(Dataset):
             sequence_seed = np.random.randint(2147483647)
             images = []
             masks = []
-            flows = []
+            forward_flows = []
+            backward_flows = []
             target_objects = []
             for f_idx in frames_idx:
                 jpg_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
@@ -194,22 +195,35 @@ class EPICDataset(Dataset):
                     agg_v_frames = all_v_jpgs[v_idx-2:v_idx+3]
                     
                 this_flow = None
+                this_backward_flow = None
                 pairwise_seed = np.random.randint(2147483647)
                 # process all flow frames
                 for tmp_idx in range(len(agg_u_frames)):
-                    reseed(sequence_seed)
                     this_flowu = Image.open(agg_u_frames[tmp_idx]).convert('P')
-                    this_flowu = self.all_gt_dual_transform(this_flowu)
-
+                    this_backward_u = Image.fromarray(255 - np.array(this_flowu), mode='P')
+                    # assert (np.array(this_flowu) + np.array(this_backward_u) == 255).all()
                     reseed(sequence_seed)
+                    this_flowu = self.all_gt_dual_transform(this_flowu)
+                    reseed(sequence_seed)
+                    this_backward_u = self.all_gt_dual_transform(this_backward_u)
+
                     this_flowv = Image.open(agg_v_frames[tmp_idx]).convert('P')
+                    this_backward_v = Image.fromarray(255 - np.array(this_flowv), mode='P')
+                    
+                    reseed(sequence_seed)
                     this_flowv = self.all_gt_dual_transform(this_flowv)
+                    reseed(sequence_seed)
+                    this_backward_v = self.all_gt_dual_transform(this_backward_v)
                     
                     reseed(pairwise_seed)
                     this_flowu = self.pair_gt_dual_transform(this_flowu)
+                    reseed(pairwise_seed)
+                    this_backward_u = self.pair_gt_dual_transform(this_backward_u)
 
                     reseed(pairwise_seed)
                     this_flowv = self.pair_gt_dual_transform(this_flowv)
+                    reseed(pairwise_seed)
+                    this_backward_v = self.pair_gt_dual_transform(this_backward_v)
                     
                     # 将0-255的像素值映射到0到1之间并中心化
                     this_flowu = transforms.ToTensor()(this_flowu)
@@ -217,11 +231,22 @@ class EPICDataset(Dataset):
                     this_flowu = this_flowu - torch.mean(this_flowu)
                     this_flowv = this_flowv - torch.mean(this_flowv)
                     
+                    # 将0-255的像素值映射到0到1之间并中心化
+                    this_backward_u = transforms.ToTensor()(this_backward_u)
+                    this_backward_v = transforms.ToTensor()(this_backward_v)
+                    this_backward_u = this_backward_u - torch.mean(this_backward_u)
+                    this_backward_v = this_backward_v - torch.mean(this_backward_v)
+                    
                     # this_flow 最后的shape是2*L x H x W
                     if this_flow == None:
                         this_flow = torch.cat([this_flowu, this_flowv], dim=0)
                     else:
                         this_flow = torch.cat([this_flow, this_flowu, this_flowv], dim=0)
+                    # this_backward_flow 最后的shape是2*L x H x W
+                    if this_backward_flow == None:
+                        this_backward_flow = torch.cat([this_backward_u, this_backward_v], dim=0)
+                    else:
+                        this_backward_flow = torch.cat([this_backward_flow, this_backward_u, this_backward_v], dim=0)
                     
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
                     reseed(sequence_seed)
@@ -243,10 +268,12 @@ class EPICDataset(Dataset):
                 this_im = self.final_im_transform(this_im)
                 
                 images.append(this_im)
-                flows.append(this_flow)
+                forward_flows.append(this_flow)
+                backward_flows.append(this_backward_flow)
 
             images = torch.stack(images, 0)
-            flows = torch.stack(flows, 0).float()
+            forward_flows = torch.stack(forward_flows, 0).float()
+            backward_flows = torch.stack(backward_flows, 0).float()
             # print(f'flow:{flows.shape}')
             labels = np.unique(masks[0])
             # Remove background
@@ -301,10 +328,12 @@ class EPICDataset(Dataset):
         # list:len = max_num_obj, 前num_objects个是1，后面是0
         selector = [1 if i < info['num_objects'] else 0 for i in range(self.max_num_obj)]
         selector = torch.FloatTensor(selector)
-        
+        print(f'forward_flow:{forward_flows.shape}')
+        print(f'backward_flow:{backward_flows.shape}')
         data = {
             'rgb': images, # [num_frames, 3, H, W]
-            'flow': flows, # [num_frames, 10, H, W]
+            'forward_flow': forward_flows, # [num_frames, 10, H, W]
+            'backward_flow': backward_flows, # [num_frames, 10, H, W]
             'first_last_frame_gt': first_last_frame_gt, # [2, max_num_obj, H, W] one hot
             'cls_gt': cls_gt, # [2, 1, H, W]
             'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
