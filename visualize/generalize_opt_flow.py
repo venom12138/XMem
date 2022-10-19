@@ -50,8 +50,32 @@ def cal_for_frames(video_path, save_path):
         cv2.imwrite(v_save_path, tmp_flow[:, :, 1])
         print(u_save_path)
 
-video_path = '/cluster/home2/yjw/venom/XMem/data/P01/rgb_frames/P01_01'
-save_path = '/cluster/home2/yjw/venom/XMem/data/P01/myflow_frames/P01_01/37'
-if not os.path.isdir(save_path):
-    os.makedirs(save_path)
-cal_for_frames(video_path, save_path)
+# video_path = '/cluster/home2/yjw/venom/XMem/data/P01/rgb_frames/P01_01'
+# save_path = '/cluster/home2/yjw/venom/XMem/data/P01/myflow_frames/P01_01/37'
+# if not os.path.isdir(save_path):
+#     os.makedirs(save_path)
+# cal_for_frames(video_path, save_path)
+
+video_path = '/home/venom/projects/XMem/val_data/P01/rgb_frames/P01_11/P01_11_9'
+
+#计算flow
+frames = glob.glob(os.path.join(video_path, '*.jpg'))
+frames.sort() #排序
+prev = cv2.imread(frames[0])
+prev = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
+
+for i, frame_curr in enumerate(frames[1:]):
+    curr = cv2.imread(frame_curr)
+    curr = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY) #RGB转换为GRAY灰度图
+    tmp_flow_forward = compute_TVL1(prev, curr)
+    tmp_flow_backward = compute_TVL1(prev, curr)
+    prev = deepcopy(curr)
+    
+    # sum_of_flow = tmp_flow_forward + tmp_flow_backward
+    # print(tmp_flow_backward.shape)
+    tmp_all = np.array([tmp_flow_forward, tmp_flow_backward]) # = np.concatenate((tmp_flow_forward.unsqueeze(2), tmp_flow_backward.unsqueeze(2)), axis=3)
+    reverse_tmp_all = 255 - tmp_all
+    sum_of_flow = tmp_all + reverse_tmp_all
+    print(tmp_all.shape)
+    print((sum_of_flow==255).all())
+    print('----------------')

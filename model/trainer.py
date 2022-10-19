@@ -342,8 +342,10 @@ class XMemTrainer:
             
             if self.config['use_flow']:
                 flow_feats = torch.flip(flow_feats, [1])
+                flow_feats = 255 - flow_feats
                 if self.config['use_teacher_model']:
                     t_flow_feats = torch.flip(t_flow_feats, [1])
+                    t_flow_feats = 255 - t_flow_feats
 
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
