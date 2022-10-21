@@ -5,7 +5,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import numpy as np
 from davis2017.davis import DAVIS
-from davis2017.metrics import db_eval_boundary, db_eval_iou
+from davis2017.metrics import db_eval_boundary, db_eval_iou, db_eval_blob
 from davis2017 import utils
 from davis2017.results import Results
 from scipy.optimize import linear_sum_assignment
@@ -33,12 +33,14 @@ class DAVISEvaluation(object):
             zero_padding = np.zeros((all_gt_masks.shape[0] - all_res_masks.shape[0], *all_res_masks.shape[1:]))
             all_res_masks = np.concatenate([all_res_masks, zero_padding], axis=0)
         j_metrics_res, f_metrics_res = np.zeros(all_gt_masks.shape[:2]), np.zeros(all_gt_masks.shape[:2])
+        blob_metrics_res = np.zeros_like(j_metrics_res)
         for ii in range(all_gt_masks.shape[0]):
             if 'J' in metric:
                 j_metrics_res[ii, :] = db_eval_iou(all_gt_masks[ii, ...], all_res_masks[ii, ...], all_void_masks)
             if 'F' in metric:
                 f_metrics_res[ii, :] = db_eval_boundary(all_gt_masks[ii, ...], all_res_masks[ii, ...], all_void_masks)
-        return j_metrics_res, f_metrics_res
+            blob_metrics_res[ii, :] = db_eval_blob(all_gt_masks[ii, ...], all_res_masks[ii, ...], all_void_masks)
+        return j_metrics_res, f_metrics_res, blob_metrics_res
 
 
     def evaluate(self, res_path, metric=('J', 'F'), debug=False):
@@ -49,7 +51,7 @@ class DAVISEvaluation(object):
             raise ValueError('Metric possible values are J for IoU or F for Boundary')
 
         # Containers
-        metrics_res = {}
+        metrics_res = {'B':{'M':[], 'M_per_object':{}}}
         if 'J' in metric:
             metrics_res['J'] = {"M": [], "R": [], "D": [], "M_per_object": {}}
         if 'F' in metric:
@@ -71,7 +73,8 @@ class DAVISEvaluation(object):
             if self.task == 'unsupervised':
                 j_metrics_res, f_metrics_res = self._evaluate_unsupervised(all_gt_masks, all_res_masks, all_void_masks, metric)
             elif self.task == 'semi-supervised':
-                j_metrics_res, f_metrics_res = self._evaluate_semisupervised(all_gt_masks, all_res_masks, None, metric)
+                j_metrics_res, f_metrics_res, blob_metrics_res = self._evaluate_semisupervised(all_gt_masks, all_res_masks, None, metric)
+                # print(blob_metrics_res)
             for ii in range(all_gt_masks.shape[0]):
                 seq_name = f'{seq}_{ii+1}'
                 if 'J' in metric:
@@ -86,7 +89,9 @@ class DAVISEvaluation(object):
                     metrics_res['F']["R"].append(FR)
                     metrics_res['F']["D"].append(FD)
                     metrics_res['F']["M_per_object"][seq_name] = FM
-
+                if self.task == 'semi-supervised':
+                    metrics_res['B']['M'].append(np.mean(blob_metrics_res[ii]))
+                    metrics_res['B']['M_per_object'][seq_name]=np.mean(blob_metrics_res[ii])
             # Show progress
             if debug:
                 sys.stdout.write(seq + '\n')

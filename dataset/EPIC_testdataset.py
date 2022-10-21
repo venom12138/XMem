@@ -15,6 +15,7 @@ import yaml
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from glob import glob
+import skimage.measure as measure
 
 class VideoReader(Dataset):
     # video_info:{key:value}

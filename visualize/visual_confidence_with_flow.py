@@ -4,11 +4,11 @@ import glob
 import sys
 sys.path.append('..')
 if torch.cuda.is_available():
-  print('Using GPU')
-  device = 'cuda'
+    print('Using GPU')
+    device = 'cuda'
 else:
-  print('CUDA not available. Please connect to a GPU instance if possible.')
-  device = 'cpu'
+    print('CUDA not available. Please connect to a GPU instance if possible.')
+    device = 'cpu'
 
 import os
 from os import path

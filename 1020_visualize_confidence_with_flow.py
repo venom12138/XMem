@@ -17,11 +17,7 @@ from progressbar import progressbar
 from tqdm import tqdm
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
 import clip
-
-# try:
-#     import hickle as hkl
-# except ImportError:
-#     print('Failed to import hickle. Fine if not using multi-scale testing.')
+import seaborn
 
 def colorize_mask(mask):
     # mask: numpy array of the mask
@@ -33,6 +29,7 @@ def colorize_mask(mask):
     new_mask.putpalette(palette)
 
     return new_mask
+
 """
 Arguments loading
 """
@@ -68,6 +65,7 @@ parser.add_argument('--deep_update_every', help='Leave -1 normally to synchroniz
 parser.add_argument('--fuser_type', default='cross_attention', type=str, choices=['cbam','cross_attention'])
 # Multi-scale options
 parser.add_argument('--save_scores', action='store_true')
+
 # parser.add_argument('--only_test_second_half', action='store_true')
 
 args = parser.parse_args()
@@ -85,12 +83,6 @@ if args.output is None:
 Data preparation
 """
 out_path = args.output
-
-# if os.path.exists(f'{out_path}/global_results-val.csv'):
-#     os.remove(f'{out_path}/global_results-val.csv')
-
-# if os.path.exists(f'{out_path}/per-sequence_results-val.csv'):
-#     os.remove(f'{out_path}/per-sequence_results-val.csv')
 
 print(out_path)
 use_flow = args.use_flow
@@ -153,12 +145,6 @@ for this_vid in tqdm(val_dataset):
         with torch.cuda.amp.autocast(enabled=not args.benchmark):
             
             whether_to_save_mask = int(data['whether_save_mask'][0].cpu())
-            # if config['only_test_second_half']:
-            #     if whether_to_save_mask:
-            #         masks_to_now += 1
-            #         if masks_to_now <= second_half_start:
-            #             whether_to_save_mask = 0
-                    
             rgb = data['rgb'][0].cuda() # 3*H*W
             flow = data['forward_flow'][0].cuda() # 10*H*W
             
@@ -187,23 +173,6 @@ for this_vid in tqdm(val_dataset):
                     # no point to do anything without a mask
                     continue
 
-            # if args.flip:
-            #     rgb = torch.flip(rgb, dims=[-1])
-            #     msk = torch.flip(msk, dims=[-1]) if msk is not None else None
-
-            # Map possibly non-continuous labels to continuous ones
-            # if msk is not None:
-                # msk, labels = mapper.convert_mask(msk[0].numpy())# convert to one hot
-                # msk = torch.Tensor(msk).cuda()
-                # if need_resize:
-                #     msk = vid_reader.resize_mask(msk.unsqueeze(0))[0]
-            #     processor.set_all_labels(list(mapper.remappings.values()))
-            # else:
-            #     labels = None
-            # print(f'frame:{rgb.shape}')
-            # print(f'flow:{flow.shape}')
-            # print(f'msk:{np.unique(msk.cpu())}')
-            # Run the model on this frame
             if msk is not None:
                 if use_flow and config['use_text']:
                     prob = processor.step(rgb, flow=flow, text=text_feat, mask=msk, end=(ti==vid_length-1))
@@ -222,7 +191,6 @@ for this_vid in tqdm(val_dataset):
                     prob = processor.step(rgb, flow=None, text=text_feat, end=(ti==vid_length-1))
                 else:
                     prob = processor.step(rgb, end=(ti==vid_length-1))
-            
 
             # Upsample to original size if needed
             if need_resize:
@@ -232,51 +200,40 @@ for this_vid in tqdm(val_dataset):
             torch.cuda.synchronize()
             total_process_time += (start.elapsed_time(end)/1000)
             total_frames += 1
-
-            # if args.flip:
-            #     prob = torch.flip(prob, dims=[-1])
-
-            # Probability mask -> index mask
-            out_mask = torch.argmax(prob, dim=0)
+            
+            thresh = 0.5
+            out_mask = torch.where(prob[1]>thresh, 1,0)
             out_mask = (out_mask.detach().cpu().numpy()).astype(np.uint8)
             
-            # if args.save_scores:
-            #     prob = (prob.detach().cpu().numpy()*255).astype(np.uint8)
-
             # Save the mask
             # print(whether_to_save_mask)
             if (args.save_all or whether_to_save_mask) and msk is None:
                 # print('save')
                 partition = vid_name.split('_')[0]
                 video_part = '_'.join(vid_name.split('_')[:2])
-                this_out_path = path.join(out_path, partition, video_part, vid_name)
+                this_out_path = path.join(out_path, f'conf_mask_{thresh}', partition, video_part, vid_name)
                 os.makedirs(this_out_path, exist_ok=True)
-                
+
                 visualization = overlay_davis(raw_frame, out_mask)
-                visual_outpath = path.join(out_path, 'draw', partition, video_part, vid_name)
+                visual_outpath = path.join(out_path, f'draw_{thresh}', partition, video_part, vid_name)
                 if not os.path.isdir(visual_outpath):
                     os.makedirs(visual_outpath)
                 plt.imsave(os.path.join(visual_outpath, frame), visualization)
                 
                 out_mask = colorize_mask(out_mask)
                 out_mask.save(os.path.join(this_out_path, frame.replace('jpg','png')))
-
-                # out_mask = mapper.remap_index_mask(out_mask)
-                # out_img = Image.fromarray(out_mask)
-                # plt.imsave(os.path.join(this_out_path, frame.replace('jpg','png')), out_mask*255, cmap='gray')
-                # out_img.save(os.path.join(this_out_path, frame))
-
+                
+                
+                prediction = torch.abs(prob[0] - prob[1]).cpu().numpy()
+                plt.figure()
+                heat_path = path.join(out_path, f'heat', partition, video_part, vid_name)
+                os.makedirs(heat_path, exist_ok=True)
+                ax = seaborn.heatmap(prediction, cmap='coolwarm', vmin=0, vmax=1, )
+                ax.get_figure().savefig(os.path.join(heat_path, frame))
+                plt.clf()
 
 
 print(f'Total processing time: {total_process_time}')
 print(f'Total processed frames: {total_frames}')
 print(f'FPS: {total_frames / total_process_time}')
 print(f'Max allocated memory (MB): {torch.cuda.max_memory_allocated() / (2**20)}')
-
-# if not args.save_scores:
-#     if is_youtube:
-#         print('Making zip for YouTubeVOS...')
-#         shutil.make_archive(path.join(args.output, path.basename(args.output)), 'zip', args.output, 'Annotations')
-#     elif is_davis and args.split == 'test':
-#         print('Making zip for DAVIS test-dev...')
-#         shutil.make_archive(args.output, 'zip', args.output)

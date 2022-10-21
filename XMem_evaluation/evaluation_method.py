@@ -44,12 +44,12 @@ else:
     # Create dataset and evaluate
     dataset_eval = DAVISEvaluation(davis_root=args.EPIC_path, yaml_root=args.yaml_root, task=args.task, gt_set=args.set, sequences=args.sequence_type)
     metrics_res = dataset_eval.evaluate(args.results_path)
-    J, F = metrics_res['J'], metrics_res['F']
+    J, F, B = metrics_res['J'], metrics_res['F'], metrics_res['B']
 
     # Generate dataframe for the general results
-    g_measures = ['J&F-Mean', 'J-Mean', 'J-Recall', 'J-Decay', 'F-Mean', 'F-Recall', 'F-Decay']
+    g_measures = ['J&F-Mean', 'Blob-Mean', 'J-Mean', 'J-Recall', 'J-Decay', 'F-Mean', 'F-Recall', 'F-Decay']
     final_mean = (np.mean(J["M"]) + np.mean(F["M"])) / 2.
-    g_res = np.array([final_mean, np.mean(J["M"]), np.mean(J["R"]), np.mean(J["D"]), np.mean(F["M"]), np.mean(F["R"]),
+    g_res = np.array([final_mean, np.mean(B['M']), np.mean(J["M"]), np.mean(J["R"]), np.mean(J["D"]), np.mean(F["M"]), np.mean(F["R"]),
                         np.mean(F["D"])])
     g_res = np.reshape(g_res, [1, len(g_res)])
     table_g = pd.DataFrame(data=g_res, columns=g_measures)
@@ -71,10 +71,11 @@ else:
         name = '_'.join(name.split('_')[:-1])
         narration = yaml_data[name]['narration']
         narrations.append(narration)
-    seq_measures = ['narration', 'Sequence', 'J-Mean', 'F-Mean']
+    seq_measures = ['narration', 'Sequence', 'J-Mean', 'F-Mean', 'Blob-Mean']
     J_per_object = [J['M_per_object'][x] for x in seq_names]
     F_per_object = [F['M_per_object'][x] for x in seq_names]
-    table_seq = pd.DataFrame(data=list(zip(seq_names, narrations, J_per_object, F_per_object)), columns=seq_measures)
+    B_per_object = [B['M_per_object'][x] for x in seq_names]
+    table_seq = pd.DataFrame(data=list(zip(seq_names, narrations, J_per_object, F_per_object, B_per_object)), columns=seq_measures)
 
     with open(csv_name_per_sequence_path, 'w') as f:
         table_seq.to_csv(f, index=False, float_format="%.3f")
