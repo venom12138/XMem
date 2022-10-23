@@ -108,6 +108,6 @@ import torchvision.transforms as transforms
 # print(f'this_flow:{this_flow.shape}')
 # print(f'this_flow:{torch.std(this_flow)}')
 
-mask = Image.open('/home/venom/projects/XMem_evaluation/results/semi-supervised/osvos/bike-packing/00001.png').convert('P')
+mask = Image.open('/home/venom/projects/XMem/val_data/P01/anno_masks/P01_11/P01_11_9/frame_0000002646.png').convert('P')
 print(np.unique(mask))
 # print(np.unique(mask))

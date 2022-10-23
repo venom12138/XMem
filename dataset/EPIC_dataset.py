@@ -14,6 +14,7 @@ from dataset.reseed import reseed
 import yaml
 import matplotlib.pyplot as plt
 from glob import glob
+import torch.nn as nn
 
 class EPICDataset(Dataset):
     """
@@ -43,43 +44,9 @@ class EPICDataset(Dataset):
             
             if len(glob(f"{vid_gt_path}/*.png")) >= 2:
                 self.vids.append(key)
-        assert num_frames >= 3
-        # These set of transform is the same for im/gt pairs, but different among the 3 sampled frames
-        self.pair_im_lone_transform = transforms.Compose([
-            transforms.ColorJitter(0.01, 0.01, 0.01, 0),
-        ])
-        # 仿射变换：平移旋转之类的
-        self.pair_im_dual_transform = transforms.Compose([
-            transforms.RandomAffine(degrees=0 if finetune else 15, shear=0 if finetune else 10, interpolation=InterpolationMode.BILINEAR, fill=im_mean),
-        ])
-
-        self.pair_gt_dual_transform = transforms.Compose([
-            transforms.RandomAffine(degrees=0 if finetune else 15, shear=0 if finetune else 10, interpolation=InterpolationMode.NEAREST, fill=0),
-        ])
-
-        # These transform are the same for all pairs in the sampled sequence
-        self.all_im_lone_transform = transforms.Compose([
-            transforms.ColorJitter(0.1, 0.03, 0.03, 0),
-            transforms.RandomGrayscale(0.05),
-        ])
-
         
-        self.all_im_dual_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomResizedCrop((384, 384), scale=(0.36,1.00), interpolation=InterpolationMode.BILINEAR)
-        ])
-
-        self.all_gt_dual_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomResizedCrop((384, 384), scale=(0.36,1.00), interpolation=InterpolationMode.NEAREST)
-        ])
-
-        # Final transform without randomness
-        self.final_im_transform = transforms.Compose([
-            transforms.ToTensor(),
-            im_normalization,
-        ])
-
+        assert num_frames >= 3
+        
     def __getitem__(self, idx):
         video_value = self.data_info[self.vids[idx]] # video value
         
@@ -114,15 +81,11 @@ class EPICDataset(Dataset):
                 acceptable_set = acceptable_set.union(new_set).difference(set(frames_idx))
 
             frames_idx = sorted(frames_idx)
-            # if np.random.rand() < 0.5:
-            #     # Reverse time
-            #     frames_idx = frames_idx[::-1]
+            
             # frames_idx就是sample出来的帧的索引
-            sequence_seed = np.random.randint(2147483647)
             images = []
             masks = []
-            forward_flows = []
-            backward_flows = []
+            flows = []
             target_objects = []
             for f_idx in frames_idx:
                 jpg_name = 'frame_' + str(frames[f_idx]).zfill(10)+ '.jpg'
@@ -163,13 +126,9 @@ class EPICDataset(Dataset):
                     flow_idx = f_idx
                     flow_name = 'frame_' + str(frames[flow_idx]).zfill(10)+ '.jpg'
                 info['frames'].append(jpg_name)
-
-                # 需要保证image、gt和flow做同样的变换，要不然mask就对不上了
-                reseed(sequence_seed)
-                this_im = Image.open(path.join(vid_im_path, jpg_name)).convert('RGB')
-                this_im = self.all_im_dual_transform(this_im)
-                this_im = self.all_im_lone_transform(this_im)
-
+                
+                images.append(np.array(Image.open(path.join(vid_im_path, jpg_name)))) #####
+                
                 # aggregate flow
                 agg_u_frames = []
                 agg_v_frames = []
@@ -193,88 +152,19 @@ class EPICDataset(Dataset):
                     agg_v_frames = all_v_jpgs[-5:]
                 else:
                     agg_v_frames = all_v_jpgs[v_idx-2:v_idx+3]
-                    
-                this_flow = None
-                this_backward_flow = None
-                pairwise_seed = np.random.randint(2147483647)
-                # process all flow frames
-                for tmp_idx in range(len(agg_u_frames)):
-                    this_flowu = Image.open(agg_u_frames[tmp_idx]).convert('P')
-                    this_backward_u = Image.fromarray(255 - np.array(this_flowu), mode='P')
-                    # assert (np.array(this_flowu) + np.array(this_backward_u) == 255).all()
-                    reseed(sequence_seed)
-                    this_flowu = self.all_gt_dual_transform(this_flowu)
-                    reseed(sequence_seed)
-                    this_backward_u = self.all_gt_dual_transform(this_backward_u)
-
-                    this_flowv = Image.open(agg_v_frames[tmp_idx]).convert('P')
-                    this_backward_v = Image.fromarray(255 - np.array(this_flowv), mode='P')
-                    
-                    reseed(sequence_seed)
-                    this_flowv = self.all_gt_dual_transform(this_flowv)
-                    reseed(sequence_seed)
-                    this_backward_v = self.all_gt_dual_transform(this_backward_v)
-                    
-                    reseed(pairwise_seed)
-                    this_flowu = self.pair_gt_dual_transform(this_flowu)
-                    reseed(pairwise_seed)
-                    this_backward_u = self.pair_gt_dual_transform(this_backward_u)
-
-                    reseed(pairwise_seed)
-                    this_flowv = self.pair_gt_dual_transform(this_flowv)
-                    reseed(pairwise_seed)
-                    this_backward_v = self.pair_gt_dual_transform(this_backward_v)
-                    
-                    # 将0-255的像素值映射到0到1之间并中心化
-                    this_flowu = transforms.ToTensor()(this_flowu)
-                    this_flowv = transforms.ToTensor()(this_flowv)
-                    this_flowu = this_flowu - torch.mean(this_flowu)
-                    this_flowv = this_flowv - torch.mean(this_flowv)
-                    
-                    # 将0-255的像素值映射到0到1之间并中心化
-                    this_backward_u = transforms.ToTensor()(this_backward_u)
-                    this_backward_v = transforms.ToTensor()(this_backward_v)
-                    this_backward_u = this_backward_u - torch.mean(this_backward_u)
-                    this_backward_v = this_backward_v - torch.mean(this_backward_v)
-                    
-                    # this_flow 最后的shape是2*L x H x W
-                    if this_flow == None:
-                        this_flow = torch.cat([this_flowu, this_flowv], dim=0)
-                    else:
-                        this_flow = torch.cat([this_flow, this_flowu, this_flowv], dim=0)
-                    # this_backward_flow 最后的shape是2*L x H x W
-                    if this_backward_flow == None:
-                        this_backward_flow = torch.cat([this_backward_u, this_backward_v], dim=0)
-                    else:
-                        this_backward_flow = torch.cat([this_backward_flow, this_backward_u, this_backward_v], dim=0)
-                    
-                if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
-                    reseed(sequence_seed)
-                    this_gt = Image.open(path.join(vid_gt_path, png_name)).convert('1')
-                    this_gt = self.all_gt_dual_transform(this_gt)
-
                 
-                reseed(pairwise_seed)
-                this_im = self.pair_im_dual_transform(this_im)
-                this_im = self.pair_im_lone_transform(this_im)
+                agg_flow = []
+                for u_frame, v_frame in zip(agg_u_frames, agg_v_frames):
+                    u = np.array(Image.open(u_frame))
+                    v = np.array(Image.open(v_frame))
+                    flow = np.stack((u,v), axis=2)
+                    agg_flow.append(flow)
+                flows.append(np.stack(agg_flow, 0))
                 
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
-                    reseed(pairwise_seed)
-                    this_gt = self.pair_gt_dual_transform(this_gt)
-                    
-                    this_gt = np.array(this_gt)
+                    this_gt = np.array(Image.open(path.join(vid_gt_path, png_name)).convert('1'))
                     masks.append(this_gt)
 
-                this_im = self.final_im_transform(this_im)
-                
-                images.append(this_im)
-                forward_flows.append(this_flow)
-                backward_flows.append(this_backward_flow)
-
-            images = torch.stack(images, 0)
-            forward_flows = torch.stack(forward_flows, 0).float()
-            backward_flows = torch.stack(backward_flows, 0).float()
-            # print(f'flow:{flows.shape}')
             labels = np.unique(masks[0])
             # Remove background
             # mask的存储形式应该是，每一个pixel属于哪一类，0,1,2...，visualize的时候，每一个类给一个color就行了
@@ -288,56 +178,40 @@ class EPICDataset(Dataset):
                 target_objects = labels.tolist()
                 break
         
+        images = np.stack(images, 0)
+        flows = np.stack(flows, 0)
+        masks = np.stack(masks, 0)
+        
         # 如果object数量太多就随机选
         if len(target_objects) > self.max_num_obj:
             target_objects = np.random.choice(target_objects, size=self.max_num_obj, replace=False)
         # 至少一个target object
         info['num_objects'] = max(1, len(target_objects))
-        # 这相当于是把list，stack成np array
-        # masks是一个[2, H, W]的np array
-        masks = np.stack(masks, 0)
-
-        # Generate one-hot ground-truth
-        cls_gt = np.zeros((2, 384, 384), dtype=np.int) # 只有两帧有mask
-        first_last_frame_gt = np.zeros((2, self.max_num_obj, 384, 384), dtype=np.int)
         
-        # target_objects是一个list，长度是objects的数量
-        for i, l in enumerate(target_objects):
-            # masks是一个[2, H, W]的np array
-            # this_mask一个[2, H, W]的np array, 其中每个像素值是true or false
-            this_mask = (masks==l)
-            # cls_gt是一个[2, H, W]的np array，将cls_gt和this_mask对应的位置赋上值
-            try:
-                cls_gt[this_mask] = i+1
-            except:
-                print(frames_idx)
-                print(cls_gt.shape)
-                print(this_mask.shape)
-                print(masks.shape)
-                print(l)
-                print(i)
-                print(self.vids[idx])
-                raise Exception('error')
-            # first_frame_gt是一个one hot向量，[1, num_objects, H, W]
-            # 将所有的num_frame里面的第一个，也就是第一个frame，里的第i个object赋给first_frame_gt，也就是一个0,1的array
-            first_last_frame_gt[:,i] = this_mask
-        # expand完变成(2, 1, H, W)
-        cls_gt = np.expand_dims(cls_gt, 1)
-
         # 1 if object exist, 0 otherwise
         # list:len = max_num_obj, 前num_objects个是1，后面是0
         selector = [1 if i < info['num_objects'] else 0 for i in range(self.max_num_obj)]
         selector = torch.FloatTensor(selector)
-        print(f'forward_flow:{forward_flows.shape}')
-        print(f'backward_flow:{backward_flows.shape}')
+
+        # data = {
+        #     'rgb': images, # [num_frames, 3, H, W]
+        #     'forward_flow': forward_flows, # [num_frames, 10, H, W]
+        #     'backward_flow': backward_flows, # [num_frames, 10, H, W]
+        #     'first_last_frame_gt': first_last_frame_gt, # [2, max_num_obj, H, W] one hot
+        #     'cls_gt': cls_gt, # [2, 1, H, W]
+        #     'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
+        #     'text':video_value['narration'],
+        #     'info': info,
+        # }
+        target_objects = torch.tensor(target_objects, dtype=torch.int)
+        
         data = {
-            'rgb': images, # [num_frames, 3, H, W]
-            'forward_flow': forward_flows, # [num_frames, 10, H, W]
-            'backward_flow': backward_flows, # [num_frames, 10, H, W]
-            'first_last_frame_gt': first_last_frame_gt, # [2, max_num_obj, H, W] one hot
-            'cls_gt': cls_gt, # [2, 1, H, W]
+            'rgb': images, # [num_frames, H, W, 3]
+            'flows': flows, # [num_frames, 5, H, W, 2]
+            'masks': masks, # [2, H, W]
+            'target_objects': target_objects, # [num_objects]
             'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
-            'text':video_value['narration'],
+            'text': video_value['narration'],
             'info': info,
         }
 

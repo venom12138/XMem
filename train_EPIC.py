@@ -26,6 +26,7 @@ from visualize.visualize_eval_result_eps import visualize_eval_result
 import wandb
 from glob import glob
 import shutil
+from model.mmsegmentation.mmseg.apis import init_segmentor
 
 # 从测试集的每一个video中随即选取一张mask，然后把每一个iter预测的这张mask都存下来，可视化结果
 def get_eval_pics(yaml_root, output_path, val_data_path, iterations):
@@ -129,7 +130,7 @@ def get_EPIC_parser():
 Initial setup
 """
 # Init distributed environment
-distributed.init_process_group(backend="nccl")
+distributed.init_process_group(backend="nccl",)
 print(f'CUDA Device count: {torch.cuda.device_count()}')
 
 # Parse command line arguments
@@ -244,7 +245,7 @@ max_skip_values = [60, 90, 40, 40]
 # 在训练的第10%，30%，80%的时候change max skip_values
 increase_skip_fraction = [0.1, 0.3, 0.8, 100]
 
-train_sampler, train_loader = renew_epic_loader(max_skip_values[0])
+train_sampler, train_loader = renew_epic_loader(max_skip_values[0], local_rank)
 renew_loader = renew_epic_loader
 
 

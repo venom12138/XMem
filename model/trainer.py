@@ -27,7 +27,7 @@ from model.losses import LossComputer
 import matplotlib.pyplot as plt
 import wandb
 import clip
-
+from model.preprocess_flow import DataPreprocess
 class EMA():
     def __init__(self, beta, iterations):
         super().__init__()
@@ -78,6 +78,8 @@ class XMemTrainer:
             if config['use_teacher_model']:
                 self.teacher_model = nn.parallel.DataParallel(
                         deepcopy(network).cuda())
+        
+        self.preprocess = DataPreprocess(num_frames=self.config['num_frames'],finetune=self.config['finetune'])
         
         # Set up logger when local_rank = 0
         self.logger = logger
@@ -138,6 +140,9 @@ class XMemTrainer:
         #     self.save_network_interval = self.save_checkpoint_interval = 1
 
     def do_pass(self, data, it=0):
+        # data: 
+            # images_path: [num_frames, batch_size]
+            # 
         # 开始使用teachermodel
         if it == self.config['teacher_warmup']:
             print('teacher start')
@@ -151,19 +156,32 @@ class XMemTrainer:
         for k, v in data.items():
             if type(v) != list and type(v) != dict and type(v) != int:
                 data[k] = v.cuda(non_blocking=True)
-    
+
         out = {}
+        # print(f'before preprocess: {data["target_objects"]}')
+        data = self.preprocess.preprocess(data)
+        # data['images_path'] = np.array(data['images_path'])
+        # data['flows_path'] = np.array(data['flows_path']).transpose(3, 0, 1, 2)
+        print(f'data.shape:{data["rgb"].shape}')
+        print(f'data.shape:{data["forward_flow"]}')
+        print(f'data.shape:{data["backward_flow"]}')
+        print(f'data.shape:{data["first_last_frame_gt"].shape}')
+        print(f'data.shape:{data["cls_gt"].shape}')
+        print(f'data.shape:{data["selector"].shape}')
+        # print(f'data.shape:{len(data["masks_path"][0][0][0])}')
+        
         # [b, num_frames, 3, H, W]
         frames = data['rgb']
         # [b, num_frames, 2, H, W]
         forward_flows = data['forward_flow']
         backward_flows = data['backward_flow']
+        
         text = data['text']
         text = [f"a photo of {t}" for t in text]
         # [b, 1, max_num_obj, H, W]
         first_frame_gt = data['first_last_frame_gt'][:,0].unsqueeze(1).float()
-        
         last_frame_gt = data['first_last_frame_gt'][:,1].unsqueeze(1).float()
+        
         b = frames.shape[0]
         # data['info']['num_objects']: [], len=b, 每一个数代表每一个clip的object数量
         
