@@ -17,7 +17,7 @@ def reseed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
 
-class DataPreprocess():
+class TrainDataPreprocess():
     def __init__(self, config_file='saves/seg_twohands_ccda/seg_twohands_ccda.py', \
                 checkpoint_file='saves/seg_twohands_ccda/best_mIoU_iter_56000.pth', \
                 num_frames=3, max_num_obj=3, remove_hand=True, finetune=False):
@@ -68,7 +68,7 @@ class DataPreprocess():
         flows = data['flows']
         # masks:[B, 2, H, W]: 2 for first and last
         masks = data['masks']
-        print(f'masks:{np.unique(masks[0,0].cpu().numpy())}')
+        # print(f'masks:{np.unique(masks[0,0].cpu().numpy())}')
         B = images.shape[0]
         num_frames = images.shape[1]
         H = 384
@@ -307,4 +307,3 @@ class DataPreprocess():
         # print('----------------')
         return Image.fromarray(flowu.cpu().numpy().astype(np.uint8), mode='P'), Image.fromarray(flowv.cpu().numpy().astype(np.uint8), mode='P')
         
-

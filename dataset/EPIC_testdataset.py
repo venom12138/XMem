@@ -24,14 +24,6 @@ class VideoReader(Dataset):
         self.video_info = video_info
         self.max_num_obj = max_num_obj
         
-        # Final transform without randomness
-        self.im_transform = transforms.Compose([
-            transforms.Resize((384,384), interpolation=InterpolationMode.BILINEAR),
-            transforms.ToTensor(),
-        ])
-        self.gt_transform = transforms.Compose([
-            transforms.Resize((384,384), interpolation=InterpolationMode.NEAREST),
-        ])
         # 获取第一帧图片的大小
         video_value = video_info[list(video_info.keys())[0]]
         # print(video_value)
@@ -80,12 +72,10 @@ class VideoReader(Dataset):
         vid_gt_path = path.join(self.data_root, video_value['participant_id'], 'anno_masks', video_value['video_id'], info['name'])
         vid_flow_path = path.join(self.data_root, video_value['participant_id'], 'flow_frames', video_value['video_id'], info['name'])
         
-        sequence_seed = np.random.randint(2147483647)
         images = []
         masks = []
         masks_count = [] # 标记是否当前帧是否有标注的annotation
-        forward_flows = []
-        backward_flows = []
+        flows = []
         # 至少一个target object
         info['num_objects'] = max(1, len(self.target_objects))
         f_idx = idx
@@ -99,10 +89,9 @@ class VideoReader(Dataset):
         info['frames'].append(jpg_name)
 
         # 需要保证image、gt和flow做同样的变换，要不然mask就对不上了
-        reseed(sequence_seed)
         this_im = Image.open(path.join(vid_im_path, jpg_name))# .convert('RGB')
-        this_im = self.im_transform(this_im)
-
+        images.append(torch.tensor(np.array(this_im)))
+        
         # aggregate flow
         agg_u_frames = []
         agg_v_frames = []
@@ -126,95 +115,32 @@ class VideoReader(Dataset):
             agg_v_frames = all_v_jpgs[-5:]
         else:
             agg_v_frames = all_v_jpgs[v_idx-2:v_idx+3]
-            
-        this_flow = None
-        this_backward_flow = None
-        # process all flow frames
-        for tmp_idx in range(len(agg_u_frames)):
-            this_flowu = Image.open(agg_u_frames[tmp_idx]).convert('P').resize((384,384))
-            this_backward_u = Image.fromarray(255 - np.array(this_flowu), mode='P')
-            this_flowv = Image.open(agg_v_frames[tmp_idx]).convert('P').resize((384,384))
-            this_backward_v = Image.fromarray(255 - np.array(this_flowv), mode='P')
-            # 将0-255的像素值映射到0到1之间并中心化
-            this_flowu = transforms.ToTensor()(this_flowu)
-            this_flowv = transforms.ToTensor()(this_flowv)
-            this_flowu = this_flowu - torch.mean(this_flowu)
-            this_flowv = this_flowv - torch.mean(this_flowv)
-            
-            this_backward_u = transforms.ToTensor()(this_backward_u)
-            this_backward_v = transforms.ToTensor()(this_backward_v)
-            this_backward_u = this_backward_u - torch.mean(this_backward_u)
-            this_backward_v = this_backward_v - torch.mean(this_backward_v)
-            
-            # this_flow 最后的shape是2*L x H x W
-            if this_flow == None:
-                this_flow = torch.cat([this_flowu, this_flowv], dim=0)
-            else:
-                this_flow = torch.cat([this_flow, this_flowu, this_flowv], dim=0)
-            
-            # this_backward_flow 最后的shape是2*L x H x W
-            if this_backward_flow == None:
-                this_backward_flow = torch.cat([this_backward_u, this_backward_v], dim=0)
-            else:
-                this_backward_flow = torch.cat([this_backward_flow, this_backward_u, this_backward_v], dim=0)
+        
+        agg_flow = []
+        for u_frame, v_frame in zip(agg_u_frames, agg_v_frames):
+            u = np.array(Image.open(u_frame))
+            v = np.array(Image.open(v_frame))
+            flow = np.stack((u,v), axis=2)
+            agg_flow.append(flow)
+        flows.append(np.stack(agg_flow, 0))
             
         if os.path.isfile(path.join(vid_gt_path, png_name)):
             masks_count.append(1)
             if f_idx == 0:
-                reseed(sequence_seed)
                 this_gt = Image.open(path.join(vid_gt_path, png_name)).convert('1')
-                this_gt = self.gt_transform(this_gt)
                 this_gt = np.array(this_gt)          
-                this_gt = this_gt.squeeze()
                 masks.append(this_gt)
+                masks = np.stack(masks, 0)
         else:
             masks_count.append(0)
         
-        images.append(this_im)
-        forward_flows.append(this_flow)
-        backward_flows.append(this_backward_flow)
-        
         images = torch.stack(images, 0)
-        forward_flows = torch.stack(forward_flows, 0).float()
-        backward_flows = torch.stack(backward_flows, 0).float()
-        # print(f'flow:{flows.shape}')
+        flows = np.stack(flows)
+
         masks_count = torch.tensor(masks_count, dtype=torch.int)
         # Remove background
         # mask的存储形式应该是，每一个pixel属于哪一类，0,1,2...，visualize的时候，每一个类给一个color就行了
         # labels里面是所有的类别0,1,2,3...，包括背景
-        if f_idx == 0:
-            
-            # 这相当于是把list，stack成np array
-            # masks是一个[1, H, W]的np array
-            # masks 保持为一个list，因为里面存在none
-            masks = np.stack(masks, 0)
-            assert masks.shape[0] == 1
-
-            # Generate one-hot ground-truth
-            cls_gt = np.zeros((1, 384, 384), dtype=np.int32) # 只有1帧有mask
-            first_frame_gt = np.zeros((1, len(self.target_objects), 384, 384), dtype=np.int32)
-        
-            # target_objects是一个list，长度是objects的数量
-            for i, l in enumerate(self.target_objects):
-                # masks是一个[1, H, W]的np array
-                # this_mask一个[1, H, W]的np array, 其中每个像素值是true or false
-                this_mask = (masks==l)
-                # cls_gt是一个[2, H, W]的np array，将cls_gt和this_mask对应的位置赋上值
-                try:
-                    cls_gt[this_mask] = i+1
-                except:
-                    print(cls_gt.shape)
-                    print(this_mask.shape)
-                    print(masks.shape)
-                    print(l)
-                    print(i)
-                    # print(self.vids[idx])
-                    raise Exception('error')
-                # first_frame_gt是一个one hot向量，[1, num_objects, H, W]
-                # 将所有的num_frame里面的第一个，也就是第一个frame，里的第i个object赋给first_frame_gt，也就是一个0,1的array
-                first_frame_gt[:,i] = this_mask
-            # expand完变成(1, 1, H, W)
-            cls_gt = np.expand_dims(cls_gt, 1)
 
         # 1 if object exist, 0 otherwise
         # list:len = max_num_obj, 前num_objects个是1，后面是0
@@ -224,25 +150,24 @@ class VideoReader(Dataset):
         # in this case num_frames = 1
         if f_idx == 0:
             data = {
-                'rgb': images, # [num_frames, 3, H, W]
-                'forward_flow': forward_flows, # [num_frames, 10, H, W]
-                'backward_flow': backward_flows, # [num_frames, 10, H, W]
-                'first_frame_gt': torch.tensor(first_frame_gt), # [1, target_objects, H, W] one hot
-                'cls_gt': torch.tensor(cls_gt), # [1, 1, H, W]
+                'rgb': images, # [1, H, W, 3]
+                'flows': flows, # [1, 5, H, W, 2]
+                'masks': masks, # [1, H, W]
                 'selector': selector, # [target_objects] 前num_objects个是1，后面是0
+                'target_objects': self.target_objects, # [num_objects]
                 'info': info,
                 # 'text': video_value['narration'], deprecated
-                'whether_save_mask': masks_count, # [num_frames] 1 if mask exist, 0 otherwise
+                'whether_save_mask': masks_count, # [1] 1 if mask exist, 0 otherwise
             }
         else:
             data = {
-                'rgb': images, # [num_frames, 3, H, W]
-                'forward_flow': forward_flows, # [num_frames, 10, H, W]
-                'backward_flow': backward_flows, # [num_frames, 10, H, W]
+                'rgb': images, # [1, H, W, 3]
+                'flows': flows, # [1, 5, H, W, 2]
                 'selector': selector, # [target_objects] 前num_objects个是1，后面是0
+                'target_objects': self.target_objects, # [num_objects]
                 'info': info,
                 # 'text': video_value['narration'], deprecated
-                'whether_save_mask': masks_count, # [num_frames] 1 if mask exist, 0 otherwise
+                'whether_save_mask': masks_count, # [1] 1 if mask exist, 0 otherwise
             }
 
         return data

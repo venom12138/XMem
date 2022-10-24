@@ -17,6 +17,7 @@ from progressbar import progressbar
 from tqdm import tqdm
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
 import clip
+from model.test_preprocess import TestDataPreprocess
 
 # try:
 #     import hickle as hkl
@@ -68,6 +69,7 @@ parser.add_argument('--deep_update_every', help='Leave -1 normally to synchroniz
 parser.add_argument('--fuser_type', default='cross_attention', type=str, choices=['cbam','cross_attention'])
 # Multi-scale options
 parser.add_argument('--save_scores', action='store_true')
+parser.add_argument('--remove_hands', default=1, type=int, choices=[0,1])
 # parser.add_argument('--only_test_second_half', action='store_true')
 
 args = parser.parse_args()
@@ -100,6 +102,8 @@ if use_flow == False:
     print('not use flow !!!!!!!!!!!')
 if args.use_text == 0:
     print('not use text !!!!!!')
+
+preprocess = TestDataPreprocess(remove_hand=config['remove_hands'])
 
 val_dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
 # val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
@@ -158,7 +162,8 @@ for this_vid in tqdm(val_dataset):
             #         masks_to_now += 1
             #         if masks_to_now <= second_half_start:
             #             whether_to_save_mask = 0
-                    
+            data = preprocess.preprocess(data)
+            
             rgb = data['rgb'][0].cuda() # 3*H*W
             flow = data['forward_flow'][0].cuda() # 10*H*W
             

@@ -26,7 +26,7 @@ from visualize.visualize_eval_result_eps import visualize_eval_result
 import wandb
 from glob import glob
 import shutil
-from model.mmsegmentation.mmseg.apis import init_segmentor
+
 
 # 从测试集的每一个video中随即选取一张mask，然后把每一个iter预测的这张mask都存下来，可视化结果
 def get_eval_pics(yaml_root, output_path, val_data_path, iterations):
@@ -312,8 +312,6 @@ if not config["only_eval"]:
 
 del model
 
-stop
-
 if local_rank == 0 and exp is not None:
     eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
     eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
@@ -336,7 +334,7 @@ if local_rank == 0 and exp is not None:
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
         if not os.path.exists(f'{output_path}/*global_results-val.csv'):
-            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])} --fuser_type {config["fuser_type"]}')
+            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --remove_hands {int(config["remove_hands"])} --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])} --fuser_type {config["fuser_type"]}')
             os.chdir('./XMem_evaluation')
             os.system(f'python evaluation_method.py --results_path "{output_path}"')
             os.system(f'python evaluation_method.py --results_path "{output_path}" --sequence_type second_half')
