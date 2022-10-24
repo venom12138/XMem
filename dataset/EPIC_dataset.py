@@ -163,6 +163,10 @@ class EPICDataset(Dataset):
                 
                 if f_idx == frames_idx[0] or f_idx == frames_idx[-1]:
                     this_gt = np.array(Image.open(path.join(vid_gt_path, png_name)).convert('1'))
+                    
+                    # this_gt = np.array(Image.fromarray(this_gt))
+                    # print(f'ddfdf:{np.unique(this_gt)}')
+                    # print(f'dataset:{np.unique(this_gt)}')
                     masks.append(this_gt)
 
             labels = np.unique(masks[0])
@@ -203,7 +207,7 @@ class EPICDataset(Dataset):
         #     'text':video_value['narration'],
         #     'info': info,
         # }
-        target_objects = torch.tensor(target_objects, dtype=torch.int)
+        target_objects = torch.tensor(target_objects, dtype=torch.bool)
         
         data = {
             'rgb': images, # [num_frames, H, W, 3]

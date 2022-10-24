@@ -68,7 +68,7 @@ class DataPreprocess():
         flows = data['flows']
         # masks:[B, 2, H, W]: 2 for first and last
         masks = data['masks']
-        
+        print(f'masks:{np.unique(masks[0,0].cpu().numpy())}')
         B = images.shape[0]
         num_frames = images.shape[1]
         H = 384
@@ -80,8 +80,25 @@ class DataPreprocess():
         new_first_last_frame_gt = torch.zeros((B, 2, self.max_num_obj, H, W), dtype=torch.float32)
         new_cls_gt = torch.zeros((B, 2, 1, H, W), dtype=torch.float32)
         
+        # get hand regions
+        if self.remove_hand:
+            hand_regions = self.get_hand_region(images)
+        
+        # for bi in range(hand_regions.shape[0]):
+        #     for fi in range(hand_regions.shape[1]):
+        #         palette = [0,0,0,255,255,255,128,0,0,0,128,0,0,0,128,255,0,0,255,255,0]
+        #         others = list(np.random.randint(0,255,size=256*3-len(palette)))
+        #         palette.extend(others)
+        #         np.savetxt('debug3.out', hand_regions[bi,fi])
+        #         seg_result = Image.fromarray(hand_regions[bi,fi])
+        #         seg_result.putpalette(palette)
+        #         seg_result.show()
+                
+        
         for bi in range(B):
-            target_objects = data['target_objects'][bi]
+            # important:因为现在是convert 1， 所以现在的target objects只有False和True，后期要是改成很多objects，就要convert P
+            # target_objects 是0，1，2这样子
+            target_objects = data['target_objects'][bi].cpu().numpy() 
             sequence_seed = np.random.randint(2147483647)
             pairwise_seed = np.random.randint(2147483647)
             video_mask = []
@@ -90,7 +107,10 @@ class DataPreprocess():
                 agg_flow = flows[bi, fi] # [5, H, W, 2]
                 this_im = self.img_preprocess(img, sequence_seed, pairwise_seed)
                 # forward_flow: [10, H, W]
-                this_forward_flow, this_backward_flow = self.flow_preprocess(img, agg_flow, sequence_seed, pairwise_seed)
+                if self.remove_hand:
+                    this_forward_flow, this_backward_flow = self.flow_preprocess(agg_flow, sequence_seed, pairwise_seed, hand_mask=hand_regions[bi,fi])
+                else:
+                    this_forward_flow, this_backward_flow = self.flow_preprocess(agg_flow, sequence_seed, pairwise_seed, hand_mask=None)
                 if fi == 0:
                     this_gt = masks[bi, 0]
                     this_gt = self.mask_preprocess(this_gt, sequence_seed, pairwise_seed)
@@ -107,10 +127,14 @@ class DataPreprocess():
             # masks是一个[2, H, W]的np array
             video_mask = np.stack(video_mask, 0)
             # Generate one-hot ground-truth
-            cls_gt = np.zeros((2, 384, 384), dtype=np.long) # 只有两帧有mask
-            first_last_frame_gt = np.zeros((2, self.max_num_obj, 384, 384), dtype=np.long)
+            cls_gt = np.zeros((2, 384, 384), dtype=np.int) # 只有两帧有mask
+            first_last_frame_gt = np.zeros((2, self.max_num_obj, 384, 384), dtype=np.int)
             
             # Image.fromarray(video_mask[0]).show()
+            # print(f"video_mask:{video_mask}")
+            
+            # np.savetxt('debug.out', video_mask[0], fmt='%d')
+            # np.savetxt('debug1.out', video_mask[1], fmt='%d')
             # dd
             
             # target_objects是一个list，长度是objects的数量
@@ -118,7 +142,6 @@ class DataPreprocess():
                 # masks是一个[2, H, W]的np array
                 # this_mask一个[2, H, W]的np array, 其中每个像素值是true or false
                 this_mask = (video_mask==l)
-                # print(this_mask)
                 # cls_gt是一个[2, H, W]的np array，将cls_gt和this_mask对应的位置赋上值
                 try:
                     cls_gt[this_mask] = i+1
@@ -129,9 +152,18 @@ class DataPreprocess():
                     print(l)
                     print(i)
                     raise Exception('error')
-                # first_frame_gt是一个one hot向量，[1, num_objects, H, W]
+                # first_frame_gt是一个one hot向量，[2, num_objects, H, W]
                 # 将所有的num_frame里面的第一个，也就是第一个frame，里的第i个object赋给first_frame_gt，也就是一个0,1的array
                 first_last_frame_gt[:,i] = this_mask
+            
+            # print(f'target_objects: {target_objects}')
+            # print(f'first_last_frame_gt: {first_last_frame_gt.dtype}')
+            # np.savetxt('debug.out', first_last_frame_gt[0, 0], fmt='%d')
+            # Image.fromarray((first_last_frame_gt[0, 0]*255).astype(np.uint8)).show()
+            # Image.fromarray((cls_gt[0]*255).astype(np.uint8)).show()
+            # print(f'cls_gt: {np.where(cls_gt)}')
+            # dd
+            
             # expand完变成(2, 1, H, W)
             cls_gt = np.expand_dims(cls_gt, 1)
             
@@ -152,14 +184,29 @@ class DataPreprocess():
         return new_data
         
     def mask_preprocess(self, mask, sequence_seed, pairwise_seed):
-        this_gt = Image.fromarray(mask.cpu().numpy().astype(np.uint8), mode='P')
+        this_gt = Image.fromarray(mask.cpu().numpy())
+        
         reseed(sequence_seed)
         this_gt = self.all_gt_dual_transform(this_gt)
         reseed(pairwise_seed)
         this_gt = self.pair_gt_dual_transform(this_gt)
-        return np.array(this_gt.convert('P'))
+        
+        return np.array(this_gt)
+    
+    # input: imgs: [B, num_frames, H, W, 3]
+    # return: [B, num_frames, H, W]
+    def get_hand_region(self, imgs):
+        B = imgs.shape[0]
+        num_frames = imgs.shape[1]
+        imgs = imgs.reshape(B*num_frames, *imgs.shape[2:])
+        imgs = np.array(imgs.cpu())
+        hand_regions = np.array(inference_segmentor(self.model, imgs)).astype(np.uint8)
+        # 
+        hand_regions = hand_regions.reshape(B, num_frames, *hand_regions.shape[1:])
+        
+        return hand_regions
 
-    def flow_preprocess(self, img, agg_flow, sequence_seed, pairwise_seed):
+    def flow_preprocess(self, agg_flow, sequence_seed, pairwise_seed, hand_mask=None):
         forward_flow = []
         backward_flow = []
         for ni in range(5):
@@ -171,8 +218,8 @@ class DataPreprocess():
             backward_u = Image.fromarray(255 - np.array(flowu), mode='P')
             backward_v = Image.fromarray(255 - np.array(flowv), mode='P')
             if self.remove_hand:
-                flowu, flowv = self.remove_hand_region(np.array(img), np.array(flowu), np.array(flowv))
-                backward_u, backward_v = self.remove_hand_region(np.array(img), np.array(backward_u), np.array(backward_v))
+                flowu, flowv = self.remove_hand_region(np.array(hand_mask), np.array(flowu), np.array(flowv))
+                backward_u, backward_v = self.remove_hand_region(np.array(hand_mask), np.array(backward_u), np.array(backward_v))
             
             reseed(sequence_seed)
             flowu = self.all_gt_dual_transform(flowu)
@@ -193,7 +240,7 @@ class DataPreprocess():
             flowv = self.pair_gt_dual_transform(flowv)
             reseed(pairwise_seed)
             backward_v = self.pair_gt_dual_transform(backward_v)
-            
+            # print(f'somethingaboutflow:{torch.max(torch.tensor(np.array(flowu)))}')
             # 将0-255的像素值映射到0到1之间并中心化
             flowu = transforms.ToTensor()(flowu)
             flowv = transforms.ToTensor()(flowv)
@@ -210,6 +257,7 @@ class DataPreprocess():
             forward_flow.append(flowv.squeeze())
             backward_flow.append(backward_u.squeeze())
             backward_flow.append(backward_v.squeeze())
+            # print(f'somethingaboutflow:{torch.max(forward_flow[0])}')
             
         # [10, H, W]
         return torch.stack(forward_flow), torch.stack(backward_flow)
@@ -227,13 +275,11 @@ class DataPreprocess():
     # img: nparray [HWC]
     # flow: nparray [HWC]
     # 将手的区域的flow置为0
-    def remove_hand_region(self, img, flowu, flowv):
+    def remove_hand_region(self, hand_mask, flowu, flowv):
         # print(f'dddimg:{img.shape}')
         flowu = torch.tensor(flowu).to(torch.float64)
         flowv = torch.tensor(flowv).to(torch.float64)
-        assert img.shape[2] == 3 and len(flowu.shape) == 2 and len(flowv.shape) == 2
-        
-        hand_mask = inference_segmentor(self.model, img)[0].astype(np.uint8)
+        assert len(hand_mask.shape) == 2 and len(flowu.shape) == 2 and len(flowv.shape) == 2
         
         positions_to_zero = np.where(hand_mask)
         hand_mask_num = len(positions_to_zero[0])
@@ -259,6 +305,6 @@ class DataPreprocess():
         # print(target_mean)
         # print(f'hand_mask_num: {hand_mask_num}')
         # print('----------------')
-        return Image.fromarray(flowu.cpu().numpy(), mode='P'), Image.fromarray(flowv.cpu().numpy(), mode='P')
+        return Image.fromarray(flowu.cpu().numpy().astype(np.uint8), mode='P'), Image.fromarray(flowv.cpu().numpy().astype(np.uint8), mode='P')
         
 

@@ -85,26 +85,43 @@ def inference_segmentor(model, img):
     test_pipeline = Compose(test_pipeline)
     # prepare data
     # img = torch.tensor(img).cuda()
-    data = dict(img=img)
-    data = test_pipeline(data)
-    data = collate([data], samples_per_gpu=1)
-    if next(model.parameters()).is_cuda:
-        # scatter to specified GPU
-        data = scatter(data, [device])[0]
-        # pass
-    else:
-        data['img_metas'] = [i.data[0].to(device) for i in data['img_metas']]
-
-    if 'additional_channel' in cfg.keys():
-        data['img_metas'][0][0]['additional_channel'] = cfg['additional_channel']
-    if 'twohands_dir' in cfg.keys():
-        data['img_metas'][0][0]['twohands_dir'] = cfg['twohands_dir']
-    if 'cb_dir' in cfg.keys():
-        data['img_metas'][0][0]['cb_dir'] = cfg['cb_dir']
+    all_data = {'img_metas':[[]], 'img':[[]]}
+    for bi in range(img.shape[0]):
+        data = dict(img=img[bi])
+        
+        data = test_pipeline(data)
+        data = collate([data], samples_per_gpu=1)
+        if next(model.parameters()).is_cuda:
+            # scatter to specified GPU
+            data = scatter(data, [device])[0]
+            # pass
+        else:
+            data['img_metas'] = [i.data[0].to(device) for i in data['img_metas']]
+        
+        # print(f'dfdfssa:{data["img"][0].shape}')
+        # print(cfg.keys())
+        if 'additional_channel' in cfg.keys():
+            data['img_metas'][0][0]['additional_channel'] = cfg['additional_channel']
+        if 'twohands_dir' in cfg.keys():
+            data['img_metas'][0][0]['twohands_dir'] = cfg['twohands_dir']
+        if 'cb_dir' in cfg.keys():
+            data['img_metas'][0][0]['cb_dir'] = cfg['cb_dir']
+        
+        all_data['img_metas'][0].append(data['img_metas'][0][0])
+        all_data['img'][0].append(data['img'][0][0])
+        
+    # print(f"data_:{data['img_metas']}")
+    all_data['img'][0] = torch.stack(all_data['img'][0], dim=0)
+    # print(f"slklkdjasfjsladk:{all_data['img'][0].shape}")
+    # print(f"all_data img: {len(all_data['img'])}")
+    # print(f"all_data img_metas: {len(all_data['img_metas'][0])}")
+    # print(f"all_data img_metas: {all_data['img_metas']}")
     
     # forward the model
     with torch.no_grad():
-        result = model(return_loss=False, rescale=True, **data)
+        result = model(return_loss=False, rescale=True, **all_data) # /home/venom/projects/XMem/model/mmsegmentation/mmseg/models/segmentors/base.py: forward_test
+    # /home/venom/projects/XMem/model/mmsegmentation/mmseg/models/segmentors/encoder_decoder.py: simple_test
+    # print(f"result: {len(result)}")
     return result
 
 

@@ -77,7 +77,7 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
         num_augs = len(imgs)
         if num_augs != len(img_metas):
             raise ValueError(f'num of augmentations ({len(imgs)}) != '
-                             f'num of image meta ({len(img_metas)})')
+                            f'num of image meta ({len(img_metas)})')
         # all images in the same aug batch all of the same ori_shape and pad
         # shape
         for img_meta in img_metas:

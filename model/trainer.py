@@ -79,7 +79,7 @@ class XMemTrainer:
                 self.teacher_model = nn.parallel.DataParallel(
                         deepcopy(network).cuda())
         
-        self.preprocess = DataPreprocess(num_frames=self.config['num_frames'],finetune=self.config['finetune'])
+        self.preprocess = DataPreprocess(num_frames=self.config['num_frames'], remove_hand=self.config['remove_hands'], finetune=self.config['finetune'])
         
         # Set up logger when local_rank = 0
         self.logger = logger

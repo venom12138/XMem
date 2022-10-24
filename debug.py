@@ -17,7 +17,7 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 import torchvision.transforms as transforms
-
+from dataset.EPIC_dataset_backup import EPICDataset
 # im_normalization = transforms.Normalize(
 #                     mean=[0.485, 0.456, 0.406],
 #                     std=[0.229, 0.224, 0.225]
@@ -108,6 +108,12 @@ import torchvision.transforms as transforms
 # print(f'this_flow:{this_flow.shape}')
 # print(f'this_flow:{torch.std(this_flow)}')
 
-mask = Image.open('/home/venom/projects/XMem/val_data/P01/anno_masks/P01_11/P01_11_9/frame_0000002646.png').convert('P')
-print(np.unique(mask))
+# mask = Image.open('/home/venom/projects/XMem/val_data/P01/anno_masks/P01_11/P01_11_9/frame_0000002646.png').convert('P')
 # print(np.unique(mask))
+# print(np.unique(mask))
+dataset = EPICDataset(data_root='/home/venom/projects/XMem/EPIC_train', yaml_root='/home/venom/projects/XMem/EPIC_train/EPIC100_state_positive_train.yaml', max_jump=20, num_frames=3, max_num_obj=3, finetune=False)
+images = dataset[2]
+print(f"name={images['info']['name']}")
+
+for obj in range(images['first_last_frame_gt'].shape[1]):
+    plt.imsave(f"../visuals/gt_{obj}.jpg", images['first_last_frame_gt'][0,obj],cmap='gray')

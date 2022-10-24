@@ -281,6 +281,9 @@ class EPICDataset(Dataset):
             images = torch.stack(images, 0)
             forward_flows = torch.stack(forward_flows, 0).float()
             backward_flows = torch.stack(backward_flows, 0).float()
+            # print(f'dddd:{np.where(masks==255)}')
+            Image.fromarray(masks[0]).show()
+            
             # print(f'flow:{flows.shape}')
             labels = np.unique(masks[0])
             # Remove background
@@ -303,6 +306,8 @@ class EPICDataset(Dataset):
         # 这相当于是把list，stack成np array
         # masks是一个[2, H, W]的np array
         masks = np.stack(masks, 0)
+        print(f'stack_masks:{masks.dtype}')
+        print(f'stack_masks:{np.unique(masks)}')
 
         # Generate one-hot ground-truth
         cls_gt = np.zeros((2, 384, 384), dtype=np.int) # 只有两帧有mask
@@ -313,6 +318,8 @@ class EPICDataset(Dataset):
             # masks是一个[2, H, W]的np array
             # this_mask一个[2, H, W]的np array, 其中每个像素值是true or false
             this_mask = (masks==l)
+            print(f"target_objects:{l}")
+            print(f'this_mask:{np.unique(this_mask)}')
             # cls_gt是一个[2, H, W]的np array，将cls_gt和this_mask对应的位置赋上值
             try:
                 cls_gt[this_mask] = i+1
@@ -354,7 +361,7 @@ class EPICDataset(Dataset):
         return len(self.vids)
 
 if __name__ == '__main__':
-    dataset = EPICDataset(data_root='../data', yaml_root='../data/EPIC55_cut_subset_200.yaml', max_jump=20, num_frames=3, max_num_obj=3, finetune=False)
+    dataset = EPICDataset(data_root='/home/venom/projects/XMem/EPIC_train', yaml_root='/home/venom/projects/XMem/EPIC_train/EPIC100_state_positive_train.yaml', max_jump=20, num_frames=3, max_num_obj=3, finetune=False)
     images = dataset[2]
     print(f"name={images['info']['name']}")
     

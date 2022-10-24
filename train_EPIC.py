@@ -123,6 +123,7 @@ def get_EPIC_parser():
     parser.add_argument('--teacher_loss_weight', default=0.1, type=float)
     
     parser.add_argument('--fuser_type', default='cbam', type=str, choices=['cbam','cross_attention'])
+    parser.add_argument('--remove_hands', default=1, type=int, choices=[0,1])
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
