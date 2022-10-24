@@ -122,7 +122,7 @@ def get_EPIC_parser():
     parser.add_argument('--ts_all_align_loss', action='store_true')
     parser.add_argument('--teacher_loss_weight', default=0.1, type=float)
     
-    parser.add_argument('--fuser_type', default='cross_attention', type=str, choices=['cbam','cross_attention'])
+    parser.add_argument('--fuser_type', default='cbam', type=str, choices=['cbam','cross_attention'])
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
@@ -286,7 +286,7 @@ if not config["only_eval"]:
                         cur_skip = max_skip_values[0]
                         max_skip_values = max_skip_values[1:]
                         change_skip_iter = change_skip_iter[1:]
-                    print(f'Changing skip to {cur_skip=}')
+                    print(f'Changing skip to {cur_skip}')
                     train_sampler, train_loader = renew_loader(cur_skip)
                     break
 
@@ -310,6 +310,8 @@ if not config["only_eval"]:
             model.save_checkpoint(total_iter)
 
 del model
+
+stop
 
 if local_rank == 0 and exp is not None:
     eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']

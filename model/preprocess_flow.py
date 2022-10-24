@@ -118,7 +118,7 @@ class DataPreprocess():
                 # masks是一个[2, H, W]的np array
                 # this_mask一个[2, H, W]的np array, 其中每个像素值是true or false
                 this_mask = (video_mask==l)
-                print(this_mask)
+                # print(this_mask)
                 # cls_gt是一个[2, H, W]的np array，将cls_gt和this_mask对应的位置赋上值
                 try:
                     cls_gt[this_mask] = i+1

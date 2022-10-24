@@ -162,12 +162,12 @@ class XMemTrainer:
         data = self.preprocess.preprocess(data)
         # data['images_path'] = np.array(data['images_path'])
         # data['flows_path'] = np.array(data['flows_path']).transpose(3, 0, 1, 2)
-        print(f'data.shape:{data["rgb"].shape}')
-        print(f'data.shape:{data["forward_flow"]}')
-        print(f'data.shape:{data["backward_flow"]}')
-        print(f'data.shape:{data["first_last_frame_gt"].shape}')
-        print(f'data.shape:{data["cls_gt"].shape}')
-        print(f'data.shape:{data["selector"].shape}')
+        # print(f'data.shape:{data["rgb"].shape}')
+        # print(f'data.shape:{data["forward_flow"]}')
+        # print(f'data.shape:{data["backward_flow"]}')
+        # print(f'data.shape:{data["first_last_frame_gt"].shape}')
+        # print(f'data.shape:{data["cls_gt"].shape}')
+        # print(f'data.shape:{data["selector"].shape}')
         # print(f'data.shape:{len(data["masks_path"][0][0][0])}')
         
         # [b, num_frames, 3, H, W]
