@@ -325,7 +325,7 @@ if local_rank == 0 and exp is not None:
                             val_data_path=config['val_data_root'],
                             iterations=eval_iters)
     
-    for i in range(len(eval_iters)):
+    for i in list(reversed(range(len(eval_iters)))):
         iteration = eval_iters[i]
         model_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/network_{iteration}.pth'
         if not os.path.exists(model_path):
