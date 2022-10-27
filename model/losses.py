@@ -179,7 +179,7 @@ class LossComputer:
         
         if self.config['classifiy_action']:
             labels = verb_class_mapping[data['action_label'].cpu().numpy()]
-            labels = torch.tensor([[lab] for lab in labels])
+            labels = torch.tensor([lab for lab in labels])
             losses['action_loss'] = F.cross_entropy(data['faction_logits'], labels.cuda())
         
         return losses
