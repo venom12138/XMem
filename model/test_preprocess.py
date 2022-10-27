@@ -136,10 +136,14 @@ class TestDataPreprocess():
             num_frames = imgs.shape[1]
             imgs = imgs.reshape(B*num_frames, *imgs.shape[2:])
             need_reshape = True
-        else:
+        elif len(imgs.shape) == 4:
             B = imgs.shape[0]
             need_reshape = False
-        imgs = np.array(imgs.cpu())
+        try:
+            imgs = np.array(imgs.cpu())
+        except:
+            imgs = np.array(imgs)
+        # print(f"imgs: {imgs.shape}")
         hand_regions = np.array(inference_segmentor(self.model, imgs)).astype(np.uint8)
         if need_reshape:
             hand_regions = hand_regions.reshape(B, num_frames, *hand_regions.shape[1:])
