@@ -364,11 +364,11 @@ class ActionClassifier(nn.Module):
     
     # x : [B, N, C, H, W]
     def forward(self, x):
-        print(f'x.shape: {x.shape}')
+        # print(f'x.shape: {x.shape}')
         assert len(x.shape) == 5
         # flatten之后, x: [B, N*C, H//16, W//16]
         x = x.flatten(start_dim=1, end_dim=2)
-        print(f'x.shape: {x.shape}')
+        # print(f'x.shape: {x.shape}')
         # x: [B, N*C, H//16, W//16]
         x = self.conv1(x)
         x = self.bn1(x)

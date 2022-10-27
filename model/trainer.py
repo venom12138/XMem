@@ -304,7 +304,7 @@ class XMemTrainer:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
                 
                 if self.config['classifiy_action']:
-                    print(f"action_input: {memory_readout.shape}")
+                    # print(f"action_input: {memory_readout.shape}")
                     if action_input is None:
                         action_input = memory_readout
                     else:
