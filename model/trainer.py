@@ -242,6 +242,9 @@ class XMemTrainer:
             # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
 
+            if self.config['classifiy_action']:
+                action_input = None
+            
             # forward video
             # 第0帧不用进行train，因为第0帧的mask已经给定了
             for ti in range(1, self.num_frames):
@@ -300,6 +303,13 @@ class XMemTrainer:
                 elif self.config['use_text']:
                     memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
                 
+                if self.config['classifiy_action']:
+                    print(f"action_input: {memory_readout.shape}")
+                    if action_input is None:
+                        action_input = memory_readout
+                    else:
+                        action_input = torch.cat([action_input, memory_readout], dim=1)
+                
                 if self.config['use_teacher_model']:
                     t_memory_readout = self.teacher_model('read_memory', t_key[:,:,ti], t_selection[:,:,ti] if t_selection is not None else None, 
                                         t_ref_keys, t_ref_shrinkage, t_ref_values)
@@ -331,12 +341,16 @@ class XMemTrainer:
                     if self.config['use_teacher_model']:
                         t_v16, t_hidden = self.teacher_model('encode_value', frames[:,ti], t_f16[:,ti], t_hidden, t_masks, is_deep_update=is_deep_update)
                         t_values = torch.cat([t_values, t_v16.unsqueeze(3)], 3) # 更新后的value用于下一帧，也就是每一帧的alue都是用的上一帧的
-
+                
                 out[f'fmasks_{ti}'] = masks
                 out[f'flogits_{ti}'] = logits
                 if self.config['use_teacher_model']:
                     out[f't_fmasks_{ti}'] = t_masks
                     out[f't_flogits_{ti}'] = t_logits
+            
+            if self.config['classifiy_action']:
+                out[f'faction_logits'] = self.XMem.module.ActionClassifier(action_input) # 已经softmax过了
+            
 ###########################################################################################################
             # frames:[B,num_frames,C,H,W]
             # key:[B, key_dim, num_frames, H//16, W//16]

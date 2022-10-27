@@ -217,6 +217,7 @@ class EPICDataset(Dataset):
             'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
             'text': video_value['narration'],
             'info': info,
+            'action_label': video_value['verb_class'],
         }
 
         return data

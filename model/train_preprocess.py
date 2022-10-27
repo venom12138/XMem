@@ -179,6 +179,7 @@ class TrainDataPreprocess():
             'selector': data['selector'], # [max_num_obj] 前num_objects个是1，后面是0
             'text': data['text'],
             'info': data['info'],
+            'action_label': data['action_label'],
         }
         
         return new_data

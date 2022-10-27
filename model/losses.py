@@ -5,6 +5,12 @@ import torch.nn.functional as F
 from collections import defaultdict
 import numpy as np
 
+verb_class_mapping = np.array([None, None, 0, None, None, 1, None, 2, None, 3, 4, 5, 6, None, None, None, None, None, 7, 8, \
+        None, None, None, None, None, 9, 10, 11, 12, None, 13, None, None, None, None, None, 14, None, None, 15, 16, None, \
+        17, 18, None, 19, None, 20, None, None, 21, None, 22, None, None, None, None, None, None, None, None, None, None, \
+        None, None, None, 23, None, None, None, None, None, None, None, 24, None, None, 25, None, None, None, 26, None, None, \
+        27, None, None, 28, None, None, None, None, None, None, 29, None, None, None, None, None])
+
 def dice_loss(input_mask, cls_gt): # cls_gt is B x H x W
     num_objects = input_mask.shape[1] # input_mask is B x max_obj_num x H x W
     losses = []
@@ -170,4 +176,10 @@ class LossComputer:
                             losses[f'sftb_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_blogits_{ti}'].detach())
                             losses[f'sbtf_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_flogits_{ti}'].detach())
                             losses['total_loss'] += losses[f'sftb_dice_loss_{ti}'] + losses[f'sbtf_dice_loss_{ti}']
+        
+        if self.config['classifiy_action']:
+            labels = verb_class_mapping[data['action_label'].cpu().numpy()]
+            labels = torch.tensor([[lab] for lab in labels])
+            losses['action_loss'] = F.cross_entropy(data['faction_logits'], labels)
+        
         return losses

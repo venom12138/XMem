@@ -64,6 +64,13 @@ class XMem(nn.Module):
                 self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=0, t_in_dim=256, out_dim=self.value_dim)
             elif config['fuser_type'] == 'cross_attention':
                 raise NotImplementedError
+        
+        self.classify_action = config['classifiy_action']
+        
+        if config['classifiy_action']:
+            # 3: max obj num
+            self.ActionClassifier = ActionClassifier(self.value_dim, 3*(config['num_frames']-1), config['action_num_classes'])
+        
         # Projection from f16 feature space to key/value space
         # indim:1024,即f16；outdim:key_dim
         self.key_proj = KeyProjection(1024, self.key_dim)
@@ -329,11 +336,34 @@ class XMem(nn.Module):
         print('----------------------------')
         # TODO sanity check 太复杂了，不好做
         if load_strict == False:
-            if self.use_text and self.use_flow:
-                assert ((len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
+            if self.use_text:
+                text_new_weights = len(self.text_proj.state_dict().keys())
+            else:
+                text_new_weights = 0
+            
+            if self.use_flow:
+                flow_new_weights = len(self.flow_encoder.state_dict().keys())
+            else:
+                flow_new_weights = 0
+                
+            if self.use_text or self.use_flow:
+                value_fuser_new_weights = len(self.value_fuser.state_dict().keys())
+            else:
+                value_fuser_new_weights = 0
+                
+            if self.classify_action:
+                action_new_weights = len(self.ActionClassifier.state_dict().keys())
+            else:
+                action_new_weights = 0
+            
+            assert ((len(new_keys) == text_new_weights + flow_new_weights + value_fuser_new_weights + action_new_weights) \
                     or len(new_keys) == 0 )
-            elif self.use_flow:
-                assert ((len(new_keys) == len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
-                    or len(new_keys) == 0 )
-            elif self.use_text:
-                assert len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.value_fuser.state_dict().keys())
+            
+            # if self.use_text and self.use_flow:
+            #     assert ((len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
+            #         or len(new_keys) == 0 )
+            # elif self.use_flow:
+            #     assert ((len(new_keys) == len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
+            #         or len(new_keys) == 0 )
+            # elif self.use_text:
+            #     assert len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.value_fuser.state_dict().keys())

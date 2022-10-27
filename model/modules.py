@@ -311,6 +311,78 @@ class FlowEncoder(nn.Module):
         
         return flow_16
 
+class HandEncoder(nn.Module):
+    def __init__(self, ):
+        super(HandEncoder, self).__init__()
+        network = resnet.resnet18(pretrained=True)
+        # hand的channels=2，其余的block使用预训练权重 
+        self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False) 
+        self.bn1 = network.bn1
+        self.relu = network.relu  # 1/2, 64
+        self.maxpool = network.maxpool
+
+        self.layer1 = network.layer1 # 1/4, 64
+        self.layer2 = network.layer2 # 1/8, 128
+        self.layer3 = network.layer3 # 1/16, 256
+    
+    # handmask: B x num_frames x 2 x H x W 
+    # left hand, right hand
+    def forward(self, hand):
+        if len(hand.shape) == 5:
+            batch_size, num_frames = hand.shape[:2]
+            # flatten之后, flow: [b*num_frames, 2, H//16, W//16]
+            hand = hand.flatten(start_dim=0, end_dim=1) # 
+            need_reshape = True
+        else:
+            need_reshape = False 
+        hand = self.conv1(hand)
+        hand = self.bn1(hand)
+        hand = self.relu(hand) 
+        hand = self.maxpool(hand)  # 1/4, 64
+
+        hand_4 = self.layer1(hand) # 1/4, 64
+        hand_8 = self.layer2(hand_4) # 1/8, 128
+        hand_16 = self.layer3(hand_8) # 1/16, 256
+        if need_reshape:
+            hand_16 = hand_16.view(batch_size, num_frames, *hand_16.shape[1:])
+        
+        return hand_16
+
+class ActionClassifier(nn.Module):
+    def __init__(self, input_channels, num_frames, num_classes):
+        super(ActionClassifier, self).__init__()
+        self.num_classes = num_classes
+        
+        self.conv1 = nn.Conv2d(input_channels*num_frames, input_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.bn1 = nn.BatchNorm2d(input_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+        
+        self.pooling = nn.AdaptiveAvgPool2d((1, 1))
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(input_channels, num_classes)
+        self.softmax = nn.Softmax(dim=1)
+    
+    # x : [B, N, C, H, W]
+    def forward(self, x):
+        print(f'x.shape: {x.shape}')
+        assert len(x.shape) == 5
+        # flatten之后, x: [B, N*C, H//16, W//16]
+        x = x.flatten(start_dim=1, end_dim=2)
+        print(f'x.shape: {x.shape}')
+        # x: [B, N*C, H//16, W//16]
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu1(x)
+        # x: [B, C, H//16, W//16]
+        x = self.pooling(x)
+        # x: [B, C, 1, 1]
+        x = self.flatten(x)
+        # x: [B, C]
+        x = self.fc(x)
+        # x: [B, num_classes]
+        x = self.softmax(x)
+        return x
+        
 class UpsampleBlock(nn.Module):
     def __init__(self, skip_dim, g_up_dim, g_out_dim, scale_factor=2):
         super().__init__()
