@@ -379,8 +379,7 @@ class ActionClassifier(nn.Module):
         x = self.flatten(x)
         # x: [B, C]
         x = self.fc(x)
-        # x: [B, num_classes]
-        x = self.softmax(x)
+        
         return x
         
 class UpsampleBlock(nn.Module):
