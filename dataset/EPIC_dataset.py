@@ -328,8 +328,8 @@ class EPICDataset(Dataset):
         # list:len = max_num_obj, 前num_objects个是1，后面是0
         selector = [1 if i < info['num_objects'] else 0 for i in range(self.max_num_obj)]
         selector = torch.FloatTensor(selector)
-        print(f'forward_flow:{forward_flows.shape}')
-        print(f'backward_flow:{backward_flows.shape}')
+        # print(f'forward_flow:{forward_flows.shape}')
+        # print(f'backward_flow:{backward_flows.shape}')
         data = {
             'rgb': images, # [num_frames, 3, H, W]
             'forward_flow': forward_flows, # [num_frames, 10, H, W]
