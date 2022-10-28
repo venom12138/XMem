@@ -66,12 +66,12 @@ class XMemTrainer:
             self.XMem = nn.parallel.DistributedDataParallel(
                 network.cuda(), 
                 device_ids=[local_rank], output_device=local_rank, 
-                broadcast_buffers=False, find_unused_parameters=True)
+                broadcast_buffers=False, find_unused_parameters=False)
             if config['use_teacher_model']:
                 self.teacher_model = nn.parallel.DistributedDataParallel(
                         deepcopy(network).cuda(), 
                         device_ids=[local_rank], output_device=local_rank, 
-                        broadcast_buffers=False, find_unused_parameters=True)
+                        broadcast_buffers=False, find_unused_parameters=False)
         except:
             network = XMem(config)
             self.XMem = nn.parallel.DataParallel(
