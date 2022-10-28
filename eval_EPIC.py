@@ -69,7 +69,10 @@ parser.add_argument('--deep_update_every', help='Leave -1 normally to synchroniz
 parser.add_argument('--fuser_type', default='cross_attention', type=str, choices=['cbam','cross_attention'])
 # Multi-scale options
 parser.add_argument('--save_scores', action='store_true')
-parser.add_argument('--remove_hands', default=1, type=int, choices=[0,1])
+parser.add_argument('--remove_hands', default=0, type=int, choices=[0,1])
+parser.add_argument('--postprocess_hand_regions', default=0, type=int, choices=[0,1])
+parser.add_argument('--classifiy_action', default=0, type=int, choices=[0,1])
+parser.add_argument('--action_num_classes', default=30, type=int)
 # parser.add_argument('--only_test_second_half', action='store_true')
 
 args = parser.parse_args()
@@ -251,7 +254,12 @@ for this_vid in tqdm(val_dataset):
             # Save the mask
             # print(whether_to_save_mask)
             if (args.save_all or whether_to_save_mask) and msk is None:
-                # print('save')
+                # hand_region: [H, W]
+                if config['postprocess_hand_regions']:
+                    hand_region = preprocess.get_hand_region(np.array(raw_frame).reshape(1, *raw_frame.shape))[0]
+                    zeros_position = np.where(hand_region)
+                    out_mask[zeros_position] = 0
+                
                 partition = vid_name.split('_')[0]
                 video_part = '_'.join(vid_name.split('_')[:2])
                 this_out_path = path.join(out_path, partition, video_part, vid_name)
