@@ -38,10 +38,11 @@ class EPICDataset(Dataset):
             PART = key.split('_')[0]
             VIDEO_ID = '_'.join(key.split('_')[:2])
             vid_gt_path = os.path.join(self.data_root, PART, 'anno_masks', VIDEO_ID, key)
+            vid_rgb_path = os.path.join(self.data_root, PART, 'rgb_frames', VIDEO_ID, key)
             # print(vid_gt_path)
             # print(glob(vid_gt_path))
             
-            if len(glob(f"{vid_gt_path}/*.png")) >= 2:
+            if len(glob(f"{vid_gt_path}/*.png")) >= 2 and len(glob(f"{vid_rgb_path}/*.jpg")) > num_frames:
                 self.vids.append(key)
         assert num_frames >= 3
         # These set of transform is the same for im/gt pairs, but different among the 3 sampled frames
