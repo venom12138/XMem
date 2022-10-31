@@ -160,6 +160,7 @@ class XMemTrainer:
         backward_flows = data['backward_flow']
         text = data['text']
         text = [f"a photo of {t}" for t in text]
+        hand_mask = data['hand_mask'] # [b,num_frames,2,H,W]
         # [b, 1, max_num_obj, H, W]
         first_frame_gt = data['first_last_frame_gt'][:,0].unsqueeze(1).float()
         
@@ -203,6 +204,13 @@ class XMemTrainer:
                 backward_flow_feats = self.XMem('encode_flow', backward_flows) # B x num_frames x Cf x H/P x W/P; Cf =256
                 if self.config['use_teacher_model']:
                     t_backward_flow_feats = self.teacher_model('encode_flow', backward_flows)
+            
+            if self.config['use_handmsk']:
+                # B num_frames 1 H W
+                handkey = self.XMem.module.hand_encoder(hand_mask)
+                
+                if self.config['use_teacher_model']:
+                    t_handkey = self.teacher_model.module.hand_encoder(hand_mask)
             
             filler_one = torch.zeros(1, dtype=torch.int64)
             hidden = torch.zeros((b, num_objects, self.config['hidden_dim'], *key.shape[-2:]))
@@ -273,25 +281,23 @@ class XMemTrainer:
                 # text_feat: [B, 256]
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
-                if self.config['use_flow'] and self.config['use_text']:
-                    # flow_feats[:,ti]:B x Cf x H/P x W/P
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=forward_flow_feats[:,ti], text_feat=text_feat) # shape不变
-                elif self.config['use_flow']:
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=forward_flow_feats[:,ti], text_feat=None) # shape不变
-                elif self.config['use_text']:
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
+                
+                memory_readout = self.XMem('fuse_value', mv=memory_readout, \
+                                        flow_feat=forward_flow_feats[:,ti] if self.config['use_flow'] else None, \
+                                        text_feat=text_feat if self.config['use_text'] else None, \
+                                        hand_feat=handkey[:, ti] if self.config['use_handmsk'] else None, \
+                                        ) # shape不变
                 
                 if self.config['use_teacher_model']:
                     t_memory_readout = self.teacher_model('read_memory', t_key[:,:,ti], t_selection[:,:,ti] if t_selection is not None else None, 
                                         t_ref_keys, t_ref_shrinkage, t_ref_values)
-                    if self.config['use_flow'] and self.config['use_text']:
-                        # flow_feats[:,ti]:B x Cf x H/P x W/P
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_forward_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
-                    elif self.config['use_flow']:
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_forward_flow_feats[:,ti], text_feat=None) # shape不变
-                    elif self.config['use_text']:
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=None, text_feat=t_text_feat) # shape不变
-                
+                    
+                    t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, \
+                        flow_feat=t_forward_flow_feats[:,ti] if self.config['use_flow'] else None, \
+                        text_feat=t_text_feat if self.config['use_text'] else None, \
+                        hand_feat=t_handkey[:, ti] if self.config['use_handmsk'] else None, \
+                        ) # shape不变
+                    
                 # args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
                 # kwargs = {'h_out':(ti < (self.num_frames-1))} # 最后一帧不进行update
                 # logits:B,max_obj_num+1,H,W; 
@@ -336,6 +342,8 @@ class XMemTrainer:
             f16 = torch.flip(f16, [1])
             f8 = torch.flip(f8, [1])
             f4 = torch.flip(f4, [1])
+            if self.config['use_handmsk']:
+                handkey = torch.flip(handkey, [1])
             if self.config['use_teacher_model']:
                 t_key = torch.flip(t_key, [2])
                 t_shrinkage = torch.flip(t_shrinkage, [2]) if t_shrinkage is not None else None
@@ -343,6 +351,8 @@ class XMemTrainer:
                 t_f16 = torch.flip(t_f16, [1])
                 t_f8 = torch.flip(t_f8, [1])
                 t_f4 = torch.flip(t_f4, [1])
+                if self.config['use_handmsk']:
+                    t_handkey = torch.flip(t_handkey, [1])
             
             if self.config['use_flow']:
                 backward_flow_feats = torch.flip(backward_flow_feats, [1])
@@ -415,24 +425,22 @@ class XMemTrainer:
                 # Segment frame ti, selection就是query_selection
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
-                if self.config['use_flow'] and self.config['use_text']:
-                    # flow_feats[:,ti]:B x Cf x H/P x W/P
-                    memory_readout = self.XMem('fuse_value', memory_readout, backward_flow_feats[:,ti], text_feat) # shape不变
-                elif self.config['use_flow']:
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=backward_flow_feats[:,ti], text_feat=None) # shape不变
-                elif self.config['use_text']:
-                    memory_readout = self.XMem('fuse_value', mv=memory_readout, flow_feat=None, text_feat=text_feat) # shape不变
+                
+                memory_readout = self.XMem('fuse_value', mv=memory_readout, \
+                                        flow_feat=backward_flow_feats[:,ti] if self.config['use_flow'] else None, \
+                                        text_feat=text_feat if self.config['use_text'] else None, \
+                                        hand_feat=handkey[:, ti] if self.config['use_handmsk'] else None, \
+                                        ) # shape不变
                 
                 if self.config['use_teacher_model']:
                     t_memory_readout = self.teacher_model('read_memory', t_key[:,:,ti], t_selection[:,:,ti] if t_selection is not None else None, 
                                         t_ref_keys, t_ref_shrinkage, t_ref_values)
-                    if self.config['use_flow'] and self.config['use_text']:
-                        # flow_feats[:,ti]:B x Cf x H/P x W/P
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_backward_flow_feats[:,ti], text_feat=t_text_feat) # shape不变
-                    elif self.config['use_flow']:
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=t_backward_flow_feats[:,ti], text_feat=None) # shape不变
-                    elif self.config['use_text']:
-                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, flow_feat=None, text_feat=t_text_feat) # shape不变
+                    
+                    t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, \
+                        flow_feat=t_backward_flow_feats[:,ti] if self.config['use_flow'] else None, \
+                        text_feat=t_text_feat if self.config['use_text'] else None, \
+                        hand_feat=t_handkey[:, ti] if self.config['use_handmsk'] else None, \
+                        ) # shape不变
                 
                 # hidden, logits, masks = self.XMem('segment', (f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, 
                 #         hidden, selector, h_out=(ti < (self.num_frames-1)))

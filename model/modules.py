@@ -47,18 +47,20 @@ class FeatureFusionBlock(nn.Module):
         return g
 
 class ValueFuser(nn.Module):
-    def __init__(self, x_in_dim, f_in_dim, t_in_dim, out_dim):
+    # hand mask in dimension
+    def __init__(self, x_in_dim, f_in_dim, t_in_dim, h_in_dim, out_dim):
         super().__init__()
 
-        self.block1 = GroupResBlock(x_in_dim+f_in_dim+t_in_dim, out_dim)
+        self.block1 = GroupResBlock(x_in_dim + f_in_dim + t_in_dim + h_in_dim, out_dim)
         self.attention = CBAM(out_dim)
         self.block2 = GroupResBlock(out_dim, out_dim)
     
     # memory_value: [b, max_obj_num, x_in_dim or value_dim, H//16, W//16]
     # flow_feat_16: [b, f_in_dim, H//16, W//16]
     # text: [b, t_in_dim]
+    # hand_mask: [b, 1, H//16, W//16]
     # return: [b, max_obj_num, out_dim/value_dim, H//16, W//16]
-    def forward(self, memory_value, flow_feat_16=None, text_feat=None):
+    def forward(self, memory_value, flow_feat_16=None, text_feat=None, hand_feat=None):
         batch_size, num_objects = memory_value.shape[:2]
         HbyP, WbyP = memory_value.shape[-2:]
         if flow_feat_16 != None:
@@ -67,7 +69,10 @@ class ValueFuser(nn.Module):
         if text_feat != None:
             text_feat = text_feat.unsqueeze(1).unsqueeze(3).unsqueeze(3).repeat(1, num_objects, 1, HbyP, WbyP) # B x max_obj_num x t_in_dim x H//16 x W//16
             memory_value = torch.cat([memory_value, text_feat], dim=2) # B x max_obj_num x (x_in_dim+f_in_dim+t_in_dim) x H//16 x W//16        
-
+        if hand_feat != None:
+            hand_feat = hand_feat.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x h_in_dim x H//16 x W//16
+            memory_value = torch.cat([memory_value, hand_feat], dim=2) # B x max_obj_num x (x_in_dim+f_in_dim+t_in_dim) x H//16 x W//16
+        
         # distributor后 g:[b, max_obj_num, x_in_dim+f_in_dim, H//16, W//16]
         memory_value = self.block1(memory_value)
         # 经过block1之后，g:[b, max_obj_num, out_dim, H//16, W//16]
@@ -310,6 +315,47 @@ class FlowEncoder(nn.Module):
             flow_16 = flow_16.view(batch_size, num_frames, *flow_16.shape[1:])
         
         return flow_16
+
+class HandEncoder(nn.Module):
+    def __init__(self, ):
+        super(HandEncoder, self).__init__()
+        network = resnet.resnet18(pretrained=True)
+        # hand的channels=2，其余的block使用预训练权重 
+        self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False) 
+        self.bn1 = network.bn1
+        self.relu = network.relu  # 1/2, 64
+        self.maxpool = network.maxpool
+
+        self.layer1 = network.layer1 # 1/4, 64
+        self.layer2 = network.layer2 # 1/8, 128
+        self.layer3 = network.layer3 # 1/16, 256
+        self.final_conv = nn.Conv2d(256, 1, kernel_size=1, bias=False) 
+    
+    # handmask:B x num_frames x 2 x H x W
+    # return handmask:B x num_frames x 1 x H x W
+    def forward(self, hand_msk):
+        hand_msk = hand_msk.to(torch.float32)
+        if len(hand_msk.shape) == 5:
+            batch_size, num_frames = hand_msk.shape[:2]
+            # flatten之后, hand_msk: [b*num_frames, 2, H//16, W//16]
+            hand_msk = hand_msk.flatten(start_dim=0, end_dim=1) # 
+            need_reshape = True
+        else:
+            need_reshape = False 
+        hand_msk = self.conv1(hand_msk)
+        hand_msk = self.bn1(hand_msk)
+        hand_msk = self.relu(hand_msk) 
+        hand_msk = self.maxpool(hand_msk)  # 1/4, 64
+
+        hand_msk_4 = self.layer1(hand_msk) # 1/4, 64
+        hand_msk_8 = self.layer2(hand_msk_4) # 1/8, 128
+        hand_msk_16 = self.layer3(hand_msk_8) # 1/16, 256
+        hand_msk_16 = self.final_conv(hand_msk_16)
+        
+        if need_reshape:
+            hand_msk_16 = hand_msk_16.view(batch_size, num_frames, *hand_msk_16.shape[1:])
+        
+        return hand_msk_16
 
 class UpsampleBlock(nn.Module):
     def __init__(self, skip_dim, g_up_dim, g_out_dim, scale_factor=2):

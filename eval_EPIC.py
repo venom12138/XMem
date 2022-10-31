@@ -39,9 +39,7 @@ Arguments loading
 parser = ArgumentParser()
 parser.add_argument('--model', default='./saves/XMem.pth')
 #ATTENTION!!!!!!!!!!!!!!!!!!!!!!!!!!
-# TODO: Note this param
-parser.add_argument('--use_flow', type=int, default=0)
-parser.add_argument('--use_text', help='whether to use text', type=int, default=0)
+
 # Data options
 parser.add_argument('--EPIC_path', default='./val_data')
 parser.add_argument('--yaml_path', default='./val_data/EPIC100_state_positive_val.yaml')
@@ -66,6 +64,10 @@ parser.add_argument('--top_k', type=int, default=30)
 parser.add_argument('--mem_every', help='r in paper. Increase to improve running speed.', type=int, default=5)
 parser.add_argument('--deep_update_every', help='Leave -1 normally to synchronize with mem_every', type=int, default=-1)
 parser.add_argument('--fuser_type', default='cross_attention', type=str, choices=['cbam','cross_attention'])
+# TODO: Note this param
+parser.add_argument('--use_flow', type=int, default=0)
+parser.add_argument('--use_text', help='whether to use text', type=int, default=0)
+parser.add_argument('--use_handmsk', default=0, type=int, choices=[0,1])
 # Multi-scale options
 parser.add_argument('--save_scores', action='store_true')
 # parser.add_argument('--only_test_second_half', action='store_true')
@@ -161,6 +163,7 @@ for this_vid in tqdm(val_dataset):
                     
             rgb = data['rgb'][0].cuda() # 3*H*W
             flow = data['forward_flow'][0].cuda() # 10*H*W
+            hand_mask = data['hand_mask'][0].cuda() # 2*H*W
             
             if ti == 0:
                 msk = data['first_frame_gt'][0].cuda() # 1*H*W
@@ -204,25 +207,11 @@ for this_vid in tqdm(val_dataset):
             # print(f'flow:{flow.shape}')
             # print(f'msk:{np.unique(msk.cpu())}')
             # Run the model on this frame
-            if msk is not None:
-                if use_flow and config['use_text']:
-                    prob = processor.step(rgb, flow=flow, text=text_feat, mask=msk, end=(ti==vid_length-1))
-                elif use_flow:
-                    prob = processor.step(rgb, flow=flow, mask=msk, end=(ti==vid_length-1))
-                elif config['use_text']:
-                    prob = processor.step(rgb, flow=None, text=text_feat, mask=msk, end=(ti==vid_length-1))
-                else:
-                    prob = processor.step(rgb, mask = msk, end=(ti==vid_length-1))
-            else:
-                if use_flow and config['use_text']:
-                    prob = processor.step(rgb, flow=flow, text=text_feat, end=(ti==vid_length-1))
-                elif use_flow:
-                    prob = processor.step(rgb, flow=flow, end=(ti==vid_length-1))
-                elif config['use_text']:
-                    prob = processor.step(rgb, flow=None, text=text_feat, end=(ti==vid_length-1))
-                else:
-                    prob = processor.step(rgb, end=(ti==vid_length-1))
-            
+            prob = processor.step(rgb, flow=flow if use_flow else None, 
+                            text=text_feat if config['use_text'] else None, 
+                            hand_mask=hand_mask if config['use_handmsk'] else None,
+                            mask=msk if (msk is not None) else None, 
+                            end=(ti==vid_length-1))            
 
             # Upsample to original size if needed
             if need_resize:

@@ -39,7 +39,7 @@ class InferenceCore:
         # self.all_labels = [l.item() for l in all_labels]
         self.all_labels = all_labels
 
-    def step(self, image, flow=None, text=None, mask=None, valid_labels=None, end=False):
+    def step(self, image, flow=None, text=None, hand_mask=None, mask=None, valid_labels=None, end=False):
         # image: 3*H*W
         # flow: 2*H*W
         # text: 1*256
@@ -50,7 +50,9 @@ class InferenceCore:
             flow, _ = pad_divide_by(flow, 16)
             flow = flow.unsqueeze(0) # add the batch dimension
         image = image.unsqueeze(0) # add the batch dimension
-        
+        if hand_mask is not None:
+            hand_mask, _ = pad_divide_by(hand_mask, 16)
+            hand_mask = hand_mask.unsqueeze(0) # add the batch dimension
         # print(f'imageshape:{image.shape}')
         # print(f'flowshape:{flow.shape}')
 
@@ -70,12 +72,17 @@ class InferenceCore:
             flow_feat = self.network.encode_flow(flow)
         else:
             flow_feat = None
-
+        
+        if hand_mask is not None:
+            hand_mask = self.network.hand_encoder(hand_mask)
+        else:
+            hand_mask = None
+            
         # segment the current frame is needed
         if need_segment:
             memory_readout = self.memory.match_memory(key, selection).unsqueeze(0)
-            if flow != None or text != None:
-                memory_readout = self.network.fuse_value(mv=memory_readout, flow_feat=flow_feat, text_feat=text)
+            if flow != None or text != None or hand_mask != None:
+                memory_readout = self.network.fuse_value(mv=memory_readout, flow_feat=flow_feat, text_feat=text, hand_feat=hand_mask)
             
             hidden, _, pred_prob_with_bg = self.network.segment(multi_scale_features, memory_readout, 
                                     self.memory.get_hidden(), h_out=is_normal_update, strip_bg=False)

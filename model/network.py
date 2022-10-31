@@ -47,23 +47,28 @@ class XMem(nn.Module):
         
         self.use_text = config['use_text']
         self.use_flow = config['use_flow']
-        if self.use_text and self.use_flow:
+        self.use_handmsk = config['use_handmsk']
+        
+        t_in_dim = 0
+        f_in_dim = 0
+        h_in_dim = 0
+        
+        if self.use_text:
+            t_in_dim = 256
+            assert config['fuser_type'] == 'cbam'
+        if self.use_flow:
             self.flow_encoder = FlowEncoder()
-            if config['fuser_type'] == 'cbam':
-                self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=256, out_dim=self.value_dim)
-            elif config['fuser_type'] == 'cross_attention':
-                raise NotImplementedError
-        elif self.use_flow:
-            self.flow_encoder = FlowEncoder()
-            if config['fuser_type'] == 'cbam':
-                self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=256, t_in_dim=0, out_dim=self.value_dim)
-            elif config['fuser_type'] == 'cross_attention':
-                self.value_fuser = CrossAttentionValueFuser(x_in_dim=self.value_dim, f_in_dim=256, out_dim=self.value_dim)
-        elif self.use_text:
-            if config['fuser_type'] == 'cbam':
-                self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=0, t_in_dim=256, out_dim=self.value_dim)
-            elif config['fuser_type'] == 'cross_attention':
-                raise NotImplementedError
+            f_in_dim = 256
+        if self.use_handmsk:
+            self.hand_encoder = HandEncoder()
+            h_in_dim = 1
+            assert config['fuser_type'] == 'cbam'
+            
+        if config['fuser_type'] == 'cbam':
+            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=f_in_dim, t_in_dim=t_in_dim, h_in_dim=h_in_dim, out_dim=self.value_dim)
+        elif config['fuser_type'] == 'cross_attention':
+            self.value_fuser = CrossAttentionValueFuser(x_in_dim=self.value_dim, f_in_dim=f_in_dim, out_dim=self.value_dim)
+        
         # Projection from f16 feature space to key/value space
         # indim:1024,即f16；outdim:key_dim
         self.key_proj = KeyProjection(1024, self.key_dim)
@@ -96,17 +101,18 @@ class XMem(nn.Module):
     # flow: [b, f_in_dim, H//16, W//16]
     # text: [b, t_in_dim]
     # return: b x max_obj_num x x_in_dim/value_dim x H/P x W/P
-    def fuse_value(self, mv=None, flow_feat=None, text_feat=None):
-        if self.use_text and self.use_flow:
-            assert mv != None and flow_feat != None and text_feat != None
+    def fuse_value(self, mv=None, flow_feat=None, text_feat=None, hand_feat=None):
+        assert mv != None
+        if self.use_text:
+            assert text_feat != None
         
-        elif self.use_flow:
-            assert mv != None and flow_feat != None and text_feat == None
+        if self.use_flow:
+            assert flow_feat != None
         
-        elif self.use_text:
-            assert mv != None and text_feat != None and flow_feat == None
-            
-        return self.value_fuser(memory_value=mv, flow_feat_16=flow_feat, text_feat=text_feat)
+        if self.use_handmsk:
+            assert hand_feat != None
+
+        return self.value_fuser(memory_value=mv, flow_feat_16=flow_feat, text_feat=text_feat, hand_feat=hand_feat)
         
     def encode_key(self, frame, need_sk=True, need_ek=True): 
         # Determine input shape
@@ -329,11 +335,30 @@ class XMem(nn.Module):
         print('----------------------------')
         # TODO sanity check 太复杂了，不好做
         if load_strict == False:
-            if self.use_text and self.use_flow:
-                assert ((len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
+            if self.use_text:
+                text_new_weights = len(self.text_proj.state_dict().keys())
+            else:
+                text_new_weights = 0
+            
+            if self.use_flow:
+                flow_new_weights = len(self.flow_encoder.state_dict().keys())
+            else:
+                flow_new_weights = 0
+                
+            if self.use_text or self.use_flow or self.use_handmsk:
+                value_fuser_new_weights = len(self.value_fuser.state_dict().keys())
+            else:
+                value_fuser_new_weights = 0
+                
+            # if self.classify_action:
+            #     action_new_weights = len(self.ActionClassifier.state_dict().keys())
+            # else:
+            #     action_new_weights = 0
+            
+            if self.use_handmsk:
+                hand_new_weights = len(self.hand_encoder.state_dict().keys())
+            else:
+                hand_new_weights = 0
+                
+            assert ((len(new_keys) == text_new_weights + flow_new_weights + value_fuser_new_weights + hand_new_weights) \
                     or len(new_keys) == 0 )
-            elif self.use_flow:
-                assert ((len(new_keys) == len(self.flow_encoder.state_dict().keys()) + len(self.value_fuser.state_dict().keys())) \
-                    or len(new_keys) == 0 )
-            elif self.use_text:
-                assert len(new_keys) == len(self.text_proj.state_dict().keys()) + len(self.value_fuser.state_dict().keys())

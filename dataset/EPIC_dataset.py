@@ -90,6 +90,7 @@ class EPICDataset(Dataset):
         # first last frame
         vid_gt_path = path.join(self.data_root, video_value['participant_id'], 'anno_masks', video_value['video_id'], self.vids[idx])
         vid_flow_path = path.join(self.data_root, video_value['participant_id'], 'flow_frames', video_value['video_id'], self.vids[idx])
+        vid_hand_path = path.join(self.data_root, video_value['participant_id'], 'hand_masks', video_value['video_id'], self.vids[idx])
         frames = list(range(video_value['start_frame'], video_value['stop_frame']))
 
         trials = 0
@@ -121,6 +122,7 @@ class EPICDataset(Dataset):
             sequence_seed = np.random.randint(2147483647)
             images = []
             masks = []
+            hands = []
             forward_flows = []
             backward_flows = []
             target_objects = []
@@ -170,6 +172,13 @@ class EPICDataset(Dataset):
                 this_im = self.all_im_dual_transform(this_im)
                 this_im = self.all_im_lone_transform(this_im)
 
+                this_hand = Image.open(path.join(vid_hand_path, png_name)).convert('P')
+                reseed(sequence_seed)
+                this_hand = self.all_gt_dual_transform(this_hand)
+                pairwise_seed = np.random.randint(2147483647)
+                reseed(pairwise_seed)
+                this_hand = self.pair_gt_dual_transform(this_hand)
+                
                 # aggregate flow
                 agg_u_frames = []
                 agg_v_frames = []
@@ -196,7 +205,7 @@ class EPICDataset(Dataset):
                     
                 this_flow = None
                 this_backward_flow = None
-                pairwise_seed = np.random.randint(2147483647)
+                
                 # process all flow frames
                 for tmp_idx in range(len(agg_u_frames)):
                     this_flowu = Image.open(agg_u_frames[tmp_idx]).convert('P')
@@ -267,6 +276,7 @@ class EPICDataset(Dataset):
 
                 this_im = self.final_im_transform(this_im)
                 
+                hands.append(this_hand)
                 images.append(this_im)
                 forward_flows.append(this_flow)
                 backward_flows.append(this_backward_flow)
@@ -274,7 +284,9 @@ class EPICDataset(Dataset):
             images = torch.stack(images, 0)
             forward_flows = torch.stack(forward_flows, 0).float()
             backward_flows = torch.stack(backward_flows, 0).float()
-            # print(f'flow:{flows.shape}')
+            # hands: num_frames x H x W
+            hands = np.stack(hands, 0)
+            
             labels = np.unique(masks[0])
             # Remove background
             # mask的存储形式应该是，每一个pixel属于哪一类，0,1,2...，visualize的时候，每一个类给一个color就行了
@@ -300,6 +312,12 @@ class EPICDataset(Dataset):
         # Generate one-hot ground-truth
         cls_gt = np.zeros((2, 384, 384), dtype=np.int) # 只有两帧有mask
         first_last_frame_gt = np.zeros((2, self.max_num_obj, 384, 384), dtype=np.int)
+        
+        hands_gt = np.zeros((self.num_frames, 2, 384, 384), dtype=np.int)
+        # one hot hand gt
+        for hand_idx in range(2):
+            this_hand = (hands==hand_idx+1)
+            hands_gt[:, hand_idx] = this_hand
         
         # target_objects是一个list，长度是objects的数量
         for i, l in enumerate(target_objects):
@@ -328,8 +346,7 @@ class EPICDataset(Dataset):
         # list:len = max_num_obj, 前num_objects个是1，后面是0
         selector = [1 if i < info['num_objects'] else 0 for i in range(self.max_num_obj)]
         selector = torch.FloatTensor(selector)
-        print(f'forward_flow:{forward_flows.shape}')
-        print(f'backward_flow:{backward_flows.shape}')
+        
         data = {
             'rgb': images, # [num_frames, 3, H, W]
             'forward_flow': forward_flows, # [num_frames, 10, H, W]
@@ -339,6 +356,7 @@ class EPICDataset(Dataset):
             'selector': selector, # [max_num_obj] 前num_objects个是1，后面是0
             'text':video_value['narration'],
             'info': info,
+            'hand_mask': hands_gt, # [num_frames, 2, H, W]
         }
 
         return data

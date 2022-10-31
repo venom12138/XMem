@@ -100,12 +100,12 @@ def get_EPIC_parser():
     parser.add_argument('--save_checkpoint_interval', default=15000, type=int)
 
     parser.add_argument('--debug', help='Debug mode which logs information more often', action='store_true')
-    parser.add_argument('--use_flow', default=1, type=int, choices=[0,1])
-    parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
 
     # Multiprocessing parameters, not set by users
     parser.add_argument('--local_rank', default=0, type=int, help='Local rank of this process')
     parser.add_argument('--en_wandb', action='store_true')
+    
+    
     parser.add_argument('--use_dice_align', action='store_true')
     parser.add_argument('--cos_lr', action='store_true')
     parser.add_argument('--only_eval', action='store_true')
@@ -120,8 +120,11 @@ def get_EPIC_parser():
     # f with fb, b with fb
     parser.add_argument('--ts_all_align_loss', action='store_true')
     parser.add_argument('--teacher_loss_weight', default=0.1, type=float)
+    parser.add_argument('--use_handmsk', default=0, type=int, choices=[0,1])
+    parser.add_argument('--use_flow', default=1, type=int, choices=[0,1])
+    parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
     
-    parser.add_argument('--fuser_type', default='cross_attention', type=str, choices=['cbam','cross_attention'])
+    parser.add_argument('--fuser_type', default='cbam', type=str, choices=['cbam','cross_attention'])
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 
@@ -332,7 +335,7 @@ if local_rank == 0 and exp is not None:
         output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
         os.makedirs(output_path, exist_ok=True)
         if not os.path.exists(f'{output_path}/*global_results-val.csv'):
-            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])} --fuser_type {config["fuser_type"]}')
+            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_handmsk {config["use_handmsk"]} --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])} --fuser_type {config["fuser_type"]}')
             os.chdir('./XMem_evaluation')
             os.system(f'python evaluation_method.py --results_path "{output_path}"')
             os.system(f'python evaluation_method.py --results_path "{output_path}" --sequence_type second_half')

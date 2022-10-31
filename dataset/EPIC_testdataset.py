@@ -79,10 +79,12 @@ class VideoReader(Dataset):
         # first last frame
         vid_gt_path = path.join(self.data_root, video_value['participant_id'], 'anno_masks', video_value['video_id'], info['name'])
         vid_flow_path = path.join(self.data_root, video_value['participant_id'], 'flow_frames', video_value['video_id'], info['name'])
+        vid_hand_path = path.join(self.data_root, video_value['participant_id'], 'hand_masks', video_value['video_id'], info['name'])
         
         sequence_seed = np.random.randint(2147483647)
         images = []
         masks = []
+        hands = []
         masks_count = [] # 标记是否当前帧是否有标注的annotation
         forward_flows = []
         backward_flows = []
@@ -103,6 +105,10 @@ class VideoReader(Dataset):
         this_im = Image.open(path.join(vid_im_path, jpg_name))# .convert('RGB')
         this_im = self.im_transform(this_im)
 
+        this_hand = Image.open(path.join(vid_hand_path, png_name)).convert('P')
+        reseed(sequence_seed)
+        this_hand = self.gt_transform(this_hand)
+        
         # aggregate flow
         agg_u_frames = []
         agg_v_frames = []
@@ -173,12 +179,28 @@ class VideoReader(Dataset):
         images.append(this_im)
         forward_flows.append(this_flow)
         backward_flows.append(this_backward_flow)
+        hands.append(this_hand)
         
         images = torch.stack(images, 0)
         forward_flows = torch.stack(forward_flows, 0).float()
         backward_flows = torch.stack(backward_flows, 0).float()
-        # print(f'flow:{flows.shape}')
+        hands = np.stack(hands, 0)
+        
         masks_count = torch.tensor(masks_count, dtype=torch.int)
+        
+        hands_gt = np.zeros((1, 2, 384, 384), dtype=np.int)
+        # one hot hand gt
+        for hand_idx in range(2):
+            this_hand = (hands==hand_idx+1)
+            hands_gt[:, hand_idx] = this_hand
+        hands_gt = torch.tensor(hands_gt, dtype=torch.int)
+        # print(f"test: hands shape {hands.shape}")
+        # print(f"test: hands_gt shape {hands_gt.shape}")
+        # print(f"test: hands content: {np.unique(hands)}")
+        # plt.imshow(hands_gt[0,0])
+        # plt.pause(1)
+        # plt.imshow(hands_gt[0,1])
+        # plt.pause(1)
         # Remove background
         # mask的存储形式应该是，每一个pixel属于哪一类，0,1,2...，visualize的时候，每一个类给一个color就行了
         # labels里面是所有的类别0,1,2,3...，包括背景
@@ -233,6 +255,7 @@ class VideoReader(Dataset):
                 'info': info,
                 # 'text': video_value['narration'], deprecated
                 'whether_save_mask': masks_count, # [num_frames] 1 if mask exist, 0 otherwise
+                'hand_mask': hands_gt, # [1, 2, H, W]
             }
         else:
             data = {
@@ -243,6 +266,7 @@ class VideoReader(Dataset):
                 'info': info,
                 # 'text': video_value['narration'], deprecated
                 'whether_save_mask': masks_count, # [num_frames] 1 if mask exist, 0 otherwise
+                'hand_mask': hands_gt, # [1, 2, H, W]
             }
 
         return data
