@@ -73,6 +73,8 @@ parser.add_argument('--remove_hands', default=0, type=int, choices=[0,1])
 parser.add_argument('--postprocess_hand_regions', default=0, type=int, choices=[0,1])
 parser.add_argument('--classifiy_action', default=0, type=int, choices=[0,1])
 parser.add_argument('--action_num_classes', default=30, type=int)
+parser.add_argument('--num_frames', default=8, type=int)
+
 # parser.add_argument('--only_test_second_half', action='store_true')
 
 args = parser.parse_args()
@@ -169,7 +171,7 @@ for this_vid in tqdm(val_dataset):
             
             rgb = data['rgb'][0].cuda() # 3*H*W
             flow = data['forward_flow'][0].cuda() # 10*H*W
-            
+            # print(f"frame: {data['info']}")
             if ti == 0:
                 msk = data['first_frame_gt'][0].cuda() # 1*H*W
                 num_objects = msk.shape[0]

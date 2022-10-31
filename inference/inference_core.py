@@ -3,7 +3,7 @@ from model.network import XMem
 from model.aggregate import aggregate
 
 from util.tensor_util import pad_divide_by, unpad
-
+import matplotlib.pyplot as plt
 
 class InferenceCore:
     def __init__(self, network:XMem, config):
@@ -74,6 +74,8 @@ class InferenceCore:
         # segment the current frame is needed
         if need_segment:
             memory_readout = self.memory.match_memory(key, selection).unsqueeze(0)
+            # plt.imshow(memory_readout[0, 0, 0].cpu().numpy(), cmap='gray')
+            # plt.show()
             if flow != None or text != None:
                 memory_readout = self.network.fuse_value(mv=memory_readout, flow_feat=flow_feat, text_feat=text)
             
