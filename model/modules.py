@@ -92,8 +92,8 @@ class CrossAttentionValueFuser(nn.Module):
         self.dimension_reduction = nn.Conv2d(
             2*(x_in_dim+f_in_dim), out_dim, kernel_size=1, stride=1, padding=0)
     
-    def forward(self, memory_value, flow_feat_16, text_feat=None):
-        assert text_feat == None
+    def forward(self, memory_value, flow_feat_16, text_feat=None, hand_feat=None):
+        assert text_feat == None and hand_feat==None
         batch_size, num_objects = memory_value.shape[:2]
         HbyP, WbyP = memory_value.shape[-2:]
         flow_feat_16 = flow_feat_16.unsqueeze(1).repeat(1, num_objects, 1, 1, 1) # B x max_obj_num x f_in_dim x H//16 x W//16

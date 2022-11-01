@@ -244,6 +244,7 @@ class XMem(nn.Module):
         Otherwise we load it either from the config or default
         """
         if model_path is not None:
+            print(f"load from: {model_path}")
             # load the model and key/value/hidden dimensions with some hacks
             # config is updated with the loaded parameters
             model_weights = torch.load(model_path, map_location=map_location)
