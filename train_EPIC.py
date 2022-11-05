@@ -124,6 +124,8 @@ def get_EPIC_parser():
     parser.add_argument('--use_flow', default=1, type=int, choices=[0,1])
     parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
     
+    parser.add_argument('--openword_test', default=0, type=int, choices=[0,1])
+    
     parser.add_argument('--fuser_type', default='cbam', type=str, choices=['cbam','cross_attention'])
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
@@ -223,8 +225,11 @@ def construct_loader(dataset):
 # BL 30K数据集
 def renew_epic_loader(max_skip, finetune=False):
     #TODO for debug
-    train_dataset = EPICDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
+    train_dataset = EPICDataset(config['epic_root'], config['yaml_root'], max_skip, openword_test=config['openword_test'], 
+                            num_frames=config['num_frames'], finetune=finetune)
     # train_dataset = EPICTestToTrainDataset(config['epic_root'], config['yaml_root'], max_skip, num_frames=config['num_frames'], finetune=finetune)
+    if config['openword_test']:
+        print('only use seen verb seen noun')
     print(f'EPIC dataset size: {len(train_dataset)}')
     print(f'Renewed with max_skip = {max_skip}')
 

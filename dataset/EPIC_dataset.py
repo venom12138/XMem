@@ -25,16 +25,27 @@ class EPICDataset(Dataset):
     - Apply random transform to each of the frame
     - The distance between frames is controlled
     """
-    def __init__(self, data_root, yaml_root, max_jump, num_frames=3, max_num_obj=3, finetune=False):
+    def __init__(self, data_root, yaml_root, max_jump, openword_test=False, num_frames=3, max_num_obj=3, finetune=False):
         print('We are using EPIC Dataset !!!!!')
         self.data_root = data_root
         self.max_jump = max_jump
         self.num_frames = num_frames
         self.max_num_obj = max_num_obj
+        
+        with open(os.path.join(self.data_root, 'train_open_word.yaml'), 'r') as f:
+            self.open_word_info = yaml.safe_load(f)
+        f.close()
+        
         with open(os.path.join(yaml_root), 'r') as f:
             self.data_info = yaml.safe_load(f)
+        f.close()
+        
         self.vids = [] 
         for key in list(self.data_info.keys()):
+            if openword_test:
+                if self.open_word_info[key] != 'svsn':
+                    continue
+            
             PART = key.split('_')[0]
             VIDEO_ID = '_'.join(key.split('_')[:2])
             vid_gt_path = os.path.join(self.data_root, PART, 'anno_masks', VIDEO_ID, key)
