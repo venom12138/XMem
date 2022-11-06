@@ -318,6 +318,8 @@ if not config["only_eval"]:
 
 del model
 
+raise NotImplementedError
+
 if local_rank == 0 and exp is not None:
     eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
     eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]

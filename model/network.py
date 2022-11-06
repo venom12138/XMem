@@ -63,11 +63,11 @@ class XMem(nn.Module):
             self.hand_encoder = HandEncoder()
             h_in_dim = 1
             assert config['fuser_type'] == 'cbam'
-            
-        if config['fuser_type'] == 'cbam':
-            self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=f_in_dim, t_in_dim=t_in_dim, h_in_dim=h_in_dim, out_dim=self.value_dim)
-        elif config['fuser_type'] == 'cross_attention':
-            self.value_fuser = CrossAttentionValueFuser(x_in_dim=self.value_dim, f_in_dim=f_in_dim, out_dim=self.value_dim)
+        if self.use_text or self.use_flow or self.use_handmsk:
+            if config['fuser_type'] == 'cbam':
+                self.value_fuser = ValueFuser(x_in_dim=self.value_dim, f_in_dim=f_in_dim, t_in_dim=t_in_dim, h_in_dim=h_in_dim, out_dim=self.value_dim)
+            elif config['fuser_type'] == 'cross_attention':
+                self.value_fuser = CrossAttentionValueFuser(x_in_dim=self.value_dim, f_in_dim=f_in_dim, out_dim=self.value_dim)
         
         # Projection from f16 feature space to key/value space
         # indim:1024,即f16；outdim:key_dim
