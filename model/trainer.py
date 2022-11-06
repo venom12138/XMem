@@ -282,21 +282,23 @@ class XMemTrainer:
                 memory_readout = self.XMem('read_memory', key[:,:,ti], selection[:,:,ti] if selection is not None else None, 
                                         ref_keys, ref_shrinkage, ref_values)
                 
-                memory_readout = self.XMem('fuse_value', mv=memory_readout, \
-                                        flow_feat=forward_flow_feats[:,ti] if self.config['use_flow'] else None, \
-                                        text_feat=text_feat if self.config['use_text'] else None, \
-                                        hand_feat=handkey[:, ti] if self.config['use_handmsk'] else None, \
-                                        ) # shape不变
+                if self.config['use_text'] or self.config['use_flow'] or self.config['use_handmsk']:
+                    memory_readout = self.XMem('fuse_value', mv=memory_readout, \
+                                            flow_feat=forward_flow_feats[:,ti] if self.config['use_flow'] else None, \
+                                            text_feat=text_feat if self.config['use_text'] else None, \
+                                            hand_feat=handkey[:, ti] if self.config['use_handmsk'] else None, \
+                                            ) # shape不变
                 
                 if self.config['use_teacher_model']:
                     t_memory_readout = self.teacher_model('read_memory', t_key[:,:,ti], t_selection[:,:,ti] if t_selection is not None else None, 
                                         t_ref_keys, t_ref_shrinkage, t_ref_values)
                     
-                    t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, \
-                        flow_feat=t_forward_flow_feats[:,ti] if self.config['use_flow'] else None, \
-                        text_feat=t_text_feat if self.config['use_text'] else None, \
-                        hand_feat=t_handkey[:, ti] if self.config['use_handmsk'] else None, \
-                        ) # shape不变
+                    if self.config['use_text'] or self.config['use_flow'] or self.config['use_handmsk']:
+                        t_memory_readout = self.teacher_model('fuse_value', mv=t_memory_readout, \
+                            flow_feat=t_forward_flow_feats[:,ti] if self.config['use_flow'] else None, \
+                            text_feat=t_text_feat if self.config['use_text'] else None, \
+                            hand_feat=t_handkey[:, ti] if self.config['use_handmsk'] else None, \
+                            ) # shape不变
                     
                 # args = [(f16[:,ti], f8[:,ti], f4[:,ti]), memory_readout, hidden, selector]
                 # kwargs = {'h_out':(ti < (self.num_frames-1))} # 最后一帧不进行update
