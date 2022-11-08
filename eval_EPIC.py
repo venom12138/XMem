@@ -17,7 +17,7 @@ from progressbar import progressbar
 from tqdm import tqdm
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
 import clip
-
+import yaml
 # try:
 #     import hickle as hkl
 # except ImportError:
@@ -68,6 +68,8 @@ parser.add_argument('--fuser_type', default='cross_attention', type=str, choices
 parser.add_argument('--use_flow', type=int, default=0)
 parser.add_argument('--use_text', help='whether to use text', type=int, default=0)
 parser.add_argument('--use_handmsk', default=0, type=int, choices=[0,1])
+parser.add_argument('--openword_test', default=0, type=int, choices=[0,1])
+
 # Multi-scale options
 parser.add_argument('--save_scores', action='store_true')
 # parser.add_argument('--only_test_second_half', action='store_true')
@@ -88,11 +90,6 @@ Data preparation
 """
 out_path = args.output
 
-# if os.path.exists(f'{out_path}/global_results-val.csv'):
-#     os.remove(f'{out_path}/global_results-val.csv')
-
-# if os.path.exists(f'{out_path}/per-sequence_results-val.csv'):
-#     os.remove(f'{out_path}/per-sequence_results-val.csv')
 
 print(out_path)
 use_flow = args.use_flow
@@ -110,19 +107,19 @@ torch.autograd.set_grad_enabled(False)
 # Load our checkpoint
 network = XMem(config, args.model).cuda().eval()
 
-# if args.model is not None:
-#     model_weights = torch.load(args.model)
-#     network.load_weights(model_weights, init_as_zero_if_needed=True)
-# else:
-#     print('No model loaded.')
-
 total_process_time = 0
 total_frames = 0
 
+with open(os.path.join(args.EPIC_path,'val_open_word.yaml'), 'r') as f:
+    open_word_info = yaml.safe_load(f)
+    
 # Start eval
 for this_vid in tqdm(val_dataset):
     vid_reader = VideoReader(args.EPIC_path, this_vid)
     vid_name = list(this_vid.keys())[0]
+    
+    vid_open_word_type = open_word_info[vid_name]
+    
     vid_value = this_vid[vid_name]
     vid_length = len(vid_reader)
     # no need to count usage for LT if the video is not that long anyway
@@ -238,7 +235,7 @@ for this_vid in tqdm(val_dataset):
                 # print('save')
                 partition = vid_name.split('_')[0]
                 video_part = '_'.join(vid_name.split('_')[:2])
-                this_out_path = path.join(out_path, partition, video_part, vid_name)
+                this_out_path = path.join(out_path, 'all', partition, video_part, vid_name)
                 os.makedirs(this_out_path, exist_ok=True)
                 
                 visualization = overlay_davis(raw_frame, out_mask)
@@ -249,7 +246,10 @@ for this_vid in tqdm(val_dataset):
                 
                 out_mask = colorize_mask(out_mask)
                 out_mask.save(os.path.join(this_out_path, frame.replace('jpg','png')))
-
+                if args.openword_test:
+                    open_word_path = path.join(out_path, vid_open_word_type, partition, video_part, vid_name)
+                    os.makedirs(open_word_path, exist_ok=True)
+                    out_mask.save(os.path.join(open_word_path, frame.replace('jpg','png')))
                 # out_mask = mapper.remap_index_mask(out_mask)
                 # out_img = Image.fromarray(out_mask)
                 # plt.imsave(os.path.join(this_out_path, frame.replace('jpg','png')), out_mask*255, cmap='gray')
