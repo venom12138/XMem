@@ -293,7 +293,7 @@ if not config["only_eval"]:
                         cur_skip = max_skip_values[0]
                         max_skip_values = max_skip_values[1:]
                         change_skip_iter = change_skip_iter[1:]
-                    print(f'Changing skip to {cur_skip=}')
+                    print(f'Changing skip to {cur_skip}')
                     train_sampler, train_loader = renew_loader(cur_skip)
                     break
 
@@ -317,84 +317,82 @@ if not config["only_eval"]:
             model.save_checkpoint(total_iter)
 
 del model
+distributed.destroy_process_group()
 
-raise NotImplementedError
-
-if local_rank == 0 and exp is not None:
-    eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
-    eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
-    if total_iter != eval_iters[-1] and total_iter>eval_iters[-1]:
-        eval_iters.append(total_iter)
-    home = pathlib.Path.home()
-    wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
-    exp_name = exp._exp_name
-    selected_pics = get_eval_pics(yaml_root=config['val_yaml_root'], 
-                            output_path=f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}',
-                            val_data_path=config['val_data_root'],
-                            iterations=eval_iters)
-    
-    for i in range(len(eval_iters)):
-        iteration = eval_iters[i]
-        model_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/network_{iteration}.pth'
-        if not os.path.exists(model_path):
-            print(f'Model not found: {model_path}')
-            continue
-        output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
-        os.makedirs(output_path, exist_ok=True)
-        if not os.path.exists(f'{output_path}/*global_results-val.csv'):
-            os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_handmsk {config["use_handmsk"]} --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])} --fuser_type {config["fuser_type"]}')
-            os.chdir('./XMem_evaluation')
-            os.system(f'python evaluation_method.py --results_path "{output_path}"')
-            os.system(f'python evaluation_method.py --results_path "{output_path}" --sequence_type second_half')
-            os.chdir('..')
-            
-        temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
-        # log eval pictures
-        for key, value in selected_pics.items():
-            pred_path = value['pred_path'][i]
-            partition = key.split('_')[0]
-            video_id = '_'.join(key.split('_')[:2])
-            os.makedirs(f'{temp_save_path}/{partition}/{video_id}/{key}', exist_ok=True)
-            if os.path.exists(pred_path):
-                shutil.copy(pred_path, f'{temp_save_path}/{partition}/{video_id}/{key}')
-            selected_pics[key]['pred_path'][i] = f'{temp_save_path}/{partition}/{video_id}/{key}/{pred_path.split("/")[-1]}'
-        
-        try:
-            current_path = os.getcwd()
-            os.chdir(output_path)
-            os.system(f'zip -qru masks.zip ./')
-            os.system(f'rm -r {output_path}/P*')
-            os.system(f'rm -r "{output_path}/draw"')
-            os.chdir(current_path)
-        except:
-            pass
-        
-    run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
-    iters, all_JF_list, all_J_list, all_F_list = visualize_eval_result(run_dir, seq_type='all')
-    _, half_JF_list, half_J_list, half_F_list = visualize_eval_result(run_dir, seq_type='second_half')
-    for i in range(len(iters)):
-        exp.log_eval_acc(all_JF_mean=all_JF_list[i], all_J_mean=all_J_list[i], all_F_mean=all_F_list[i], 
-            half_JF_mean=half_JF_list[i], half_J_mean=half_J_list[i], half_F_mean=half_F_list[i], step=iters[i])
-    
-    output_imgs = pair_pics_together(selected_pics)
-    for img in output_imgs:
-        # print(sys.getsizeof(img))
-        # plt.imshow(img)
-        # plt.show()
-        img = wandb.Image(img)
-        wandb.log({"eval_imgs": img})
-    
-    # remove mask file to save space 
-    for iteration in eval_iters:
-        exp_name = exp._exp_name
+if False:
+    if local_rank == 0 and exp is not None:
+        eval_iters = (config['iterations'] + config['finetune'])//config['save_network_interval']
+        eval_iters = [it*config['save_network_interval'] for it in range(1, eval_iters+1)]
+        if total_iter != eval_iters[-1] and total_iter>eval_iters[-1]:
+            eval_iters.append(total_iter)
         home = pathlib.Path.home()
         wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
-        output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
-        temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
-        os.system(f'zip -qru {output_path}/select_pics.zip {temp_save_path}/')
-        os.system(f'rm -r {temp_save_path}/')
-            # os.system(f'rm -r "{output_path}/draw"')
-    # exp.write
-# network_in_memory = model.XMem.module.state_dict()
+        exp_name = exp._exp_name
+        selected_pics = get_eval_pics(yaml_root=config['val_yaml_root'], 
+                                output_path=f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}',
+                                val_data_path=config['val_data_root'],
+                                iterations=eval_iters)
+        
+        for i in range(len(eval_iters)):
+            iteration = eval_iters[i]
+            model_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/network_{iteration}.pth'
+            if not os.path.exists(model_path):
+                print(f'Model not found: {model_path}')
+                continue
+            output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
+            os.makedirs(output_path, exist_ok=True)
+            if not os.path.exists(f'{output_path}/*global_results-val.csv'):
+                os.system(f'python eval_EPIC.py --model "{model_path}" --output "{output_path}" --use_handmsk {config["use_handmsk"]} --use_flow {int(config["use_flow"])} --use_text {int(config["use_text"])} --fuser_type {config["fuser_type"]}')
+                os.chdir('./XMem_evaluation')
+                os.system(f'python evaluation_method.py --results_path "{output_path}"')
+                os.system(f'python evaluation_method.py --results_path "{output_path}" --sequence_type second_half')
+                os.chdir('..')
+                
+            temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
+            # log eval pictures
+            for key, value in selected_pics.items():
+                pred_path = value['pred_path'][i]
+                partition = key.split('_')[0]
+                video_id = '_'.join(key.split('_')[:2])
+                os.makedirs(f'{temp_save_path}/{partition}/{video_id}/{key}', exist_ok=True)
+                if os.path.exists(pred_path):
+                    shutil.copy(pred_path, f'{temp_save_path}/{partition}/{video_id}/{key}')
+                selected_pics[key]['pred_path'][i] = f'{temp_save_path}/{partition}/{video_id}/{key}/{pred_path.split("/")[-1]}'
+            
+            try:
+                current_path = os.getcwd()
+                os.chdir(output_path)
+                os.system(f'zip -qru masks.zip ./')
+                os.system(f'rm -r {output_path}/P*')
+                os.system(f'rm -r "{output_path}/draw"')
+                os.chdir(current_path)
+            except:
+                pass
+            
+        run_dir = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}'
+        iters, all_JF_list, all_J_list, all_F_list = visualize_eval_result(run_dir, seq_type='all')
+        _, half_JF_list, half_J_list, half_F_list = visualize_eval_result(run_dir, seq_type='second_half')
+        for i in range(len(iters)):
+            exp.log_eval_acc(all_JF_mean=all_JF_list[i], all_J_mean=all_J_list[i], all_F_mean=all_F_list[i], 
+                half_JF_mean=half_JF_list[i], half_J_mean=half_J_list[i], half_F_mean=half_F_list[i], step=iters[i])
+        
+        output_imgs = pair_pics_together(selected_pics)
+        for img in output_imgs:
+            # print(sys.getsizeof(img))
+            # plt.imshow(img)
+            # plt.show()
+            img = wandb.Image(img)
+            wandb.log({"eval_imgs": img})
+        
+        # remove mask file to save space 
+        for iteration in eval_iters:
+            exp_name = exp._exp_name
+            home = pathlib.Path.home()
+            wandb_project = os.getenv('WANDB_PROJECT', default='default_project')
+            output_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}'
+            temp_save_path = f'{home}/.exp/{wandb_project}/{exp_name}/{exp._exp_id}/eval_{iteration}/temp_save'
+            os.system(f'zip -qru {output_path}/select_pics.zip {temp_save_path}/')
+            os.system(f'rm -r {temp_save_path}/')
+                
 
-distributed.destroy_process_group()
+    distributed.destroy_process_group()
