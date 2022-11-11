@@ -27,6 +27,7 @@ def db_eval_blob(annotations, segmentations, void_pixels=None):
         one_hot_anno_wo_bg = np.array(one_hot_anno[1:])
         one_hot_segm = F.one_hot(torch.tensor(blob_segmentation).to(torch.int64), num_classes=np.max(blob_segmentation)+1).permute(2, 0, 1)
         one_hot_segm_wo_bg = np.array(one_hot_segm[1:])
+        
         instance_iou = []
         if one_hot_anno_wo_bg.shape[0] == 0:
             blob_ious.append(0)

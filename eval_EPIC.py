@@ -103,7 +103,7 @@ if args.use_text == 0:
 val_dataset = EPICtestDataset(args.EPIC_path, args.yaml_path)
 # val_loader = DataLoader(dataset, 1,  shuffle=False, num_workers=4)
 torch.autograd.set_grad_enabled(False)
-
+print('load model from {args.model}')
 # Load our checkpoint
 network = XMem(config, args.model).cuda().eval()
 
@@ -208,7 +208,7 @@ for this_vid in tqdm(val_dataset):
                             text=text_feat if config['use_text'] else None, 
                             hand_mask=hand_mask if config['use_handmsk'] else None,
                             mask=msk if (msk is not None) else None, 
-                            end=(ti==vid_length-1))            
+                            end=(ti==vid_length-1))         
 
             # Upsample to original size if needed
             if need_resize:

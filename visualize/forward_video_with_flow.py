@@ -43,25 +43,29 @@ config = {
     'min_mid_term_frames': 5,
     'max_mid_term_frames': 10,
     'max_long_term_elements': 10000,
+    'use_text':0,
+    'use_flow':0,
+    'use_handmsk':0,
+    'fuser_type':'cbam',
 }
 
-ROOT_PATH = '/home/venom/projects/XMem/val_data'
-vid = 'P02_12_33'
-use_flow = True 
+ROOT_PATH = '/home/venom/data/EPIC_train_split'
+vid = 'P01_01_37'
+use_flow = False 
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
-ckpt_path = '/home/venom/projects/XMem/saves/Sep02_10.45.20_test_0902_nframes_3_epic_25000.pth'
+ckpt_path = '/home/venom/.exp/1108_Ablation/D0232_freeze=0,fuse_type=cbam,num_frames=8,steps=1000,use_text=0,use_flow=0/network_10000.pth'
 if 'noflow' in ckpt_path:
     use_flow = False
     print('not use flow !!!!!!!!!!!')
 network = XMem(config, ckpt_path).eval().to(device)
 if use_flow:
-    mask_save_path = f'../visuals/{partition_id}/flow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/flow_draw/{video_id}/{vid}'
+    mask_save_path = f'../visuals/{partition_id}/1111flow_mask/{video_id}/{vid}'
+    draw_save_path = f'../visuals/{partition_id}/1111flow_draw/{video_id}/{vid}'
 else:
-    mask_save_path = f'../visuals/{partition_id}/noflow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/noflow_draw/{video_id}/{vid}'
+    mask_save_path = f'../visuals/{partition_id}/1111noflow_mask/{video_id}/{vid}'
+    draw_save_path = f'../visuals/{partition_id}/1111noflow_draw/{video_id}/{vid}'
 
 video_path = f'{ROOT_PATH}/{partition_id}/rgb_frames/{video_id}/{vid}'
 u_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/u'
@@ -127,13 +131,13 @@ with torch.cuda.amp.autocast(enabled=True):
             
             # the background mask is not fed into the model
             if use_flow:
-                prediction = processor.step(frame_torch, flow_torch, mask_torch[1:])
+                prediction = processor.step(frame_torch, flow=flow_torch, mask=mask_torch[1:])
             else:
                 prediction = processor.step(frame_torch, flow=None, mask = mask_torch[1:])
         else:
             # propagate only
             if use_flow:
-                prediction = processor.step(frame_torch, flow_torch)
+                prediction = processor.step(frame_torch, flow=flow_torch)
             else:
                 prediction = processor.step(frame_torch)
         # print(prediction.shape)
@@ -149,6 +153,7 @@ with torch.cuda.amp.autocast(enabled=True):
             # print(prediction.shape)
             # print(visualization.shape)
         plt.imsave(f"{draw_save_path}/{frame_path.split('/')[-1]}", visualization)
+        print(f"{draw_save_path}/{frame_path.split('/')[-1]}")
 
         current_frame_index += 1
 import imageio.v2 as imageio
