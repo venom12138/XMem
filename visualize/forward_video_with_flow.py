@@ -146,7 +146,7 @@ with torch.cuda.amp.autocast(enabled=True):
         # 0,1
         prediction = torch_prob_to_numpy_mask(prediction)
         
-        # plt.imsave(f"{mask_save_path}/{uid}/{frame_path.split('/')[-1]}", prediction*255)
+        plt.imsave(f"{mask_save_path}/{frame_path.split('/')[-1]}", prediction*255)
         
         # if current_frame_index % visualize_every == 0:
         visualization = overlay_davis(frame, prediction)
@@ -156,19 +156,19 @@ with torch.cuda.amp.autocast(enabled=True):
         print(f"{draw_save_path}/{frame_path.split('/')[-1]}")
 
         current_frame_index += 1
-import imageio.v2 as imageio
-images = []
-for frame_path in sorted(glob.glob(f'{draw_save_path}/*.jpg')):
-    im = imageio.imread(frame_path)
-    images.append(im)
-if use_flow:
-    if not os.path.exists(f'../visuals/{partition_id}/flow_gif/{video_id}/'):
-        os.makedirs(f'../visuals/{partition_id}/flow_gif/{video_id}/')
-    imageio.mimsave(f'../visuals/{partition_id}/flow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
-else:
-    if not os.path.exists(f'../visuals/{partition_id}/noflow_gif/{video_id}/'):
-        os.makedirs(f'../visuals/{partition_id}/noflow_gif/{video_id}/')
-    imageio.mimsave(f'../visuals/{partition_id}/noflow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
+# import imageio.v2 as imageio
+# images = []
+# for frame_path in sorted(glob.glob(f'{draw_save_path}/*.jpg')):
+#     im = imageio.imread(frame_path)
+#     images.append(im)
+# if use_flow:
+#     if not os.path.exists(f'../visuals/{partition_id}/flow_gif/{video_id}/'):
+#         os.makedirs(f'../visuals/{partition_id}/flow_gif/{video_id}/')
+#     imageio.mimsave(f'../visuals/{partition_id}/flow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
+# else:
+#     if not os.path.exists(f'../visuals/{partition_id}/noflow_gif/{video_id}/'):
+#         os.makedirs(f'../visuals/{partition_id}/noflow_gif/{video_id}/')
+#     imageio.mimsave(f'../visuals/{partition_id}/noflow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
     
 
 # f'../visuals/{partition_id}/flow_draw/{video_id}/{vid}'
