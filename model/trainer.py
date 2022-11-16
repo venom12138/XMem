@@ -337,6 +337,9 @@ class XMemTrainer:
             # flow_feat:[B, num_frames, 256, H//16, W//16]
             # 将keys, shrinkage, selection, f16, f8, f4, flow_feats reverse
             
+            # [b, 1, max_num_obj, H, W]
+            last_frame_gt = out[f'fmasks_{self.num_frames-1}'].unsqueeze(1)
+            # print(f"last_frame_gt:{last_frame_gt.shape}")
             frames = torch.flip(frames, [1]) # [B,num_frames,C,H,W]
             key = torch.flip(key, [2])
             shrinkage = torch.flip(shrinkage, [2]) if shrinkage is not None else None

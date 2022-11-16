@@ -129,30 +129,15 @@ class LossComputer:
             # weight.requires_grad=False
             weight = self.end_w + (self.start_w - self.end_w) * (ti / (t-1))
             for bi in range(b):
-                if ti == t-1:
-                    loss, p = self.bce(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,1,0], it)
-                    losses['p'] += p / b / 2 # (t-1)
-                    losses[f'ce_loss_{ti}'] += loss / b
-                elif ti == 0:
+                if ti == 0:
                     loss, p = self.bce(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data['cls_gt'][bi:bi+1,0,0], it)
                     losses['p'] += p / b / 2 # (t-1)
                     losses[f'ce_loss_{ti}'] += loss / b
-                # else:
-                #     if it%2 == 0:
-                #         loss, p = self.bkl(data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it) # 这里是把有objects的给拿出来了，附带上一个背景
-                #         loss = loss * weight
-                #     else:
-                #         loss, p = self.bkl(data[f'blogits_{ti}'][bi:bi+1, :num_objects[bi]+1], data[f'flogits_{ti}'][bi:bi+1, :num_objects[bi]+1], it)
-                #         loss = loss * (1-weight+self.end_w)
-                
 
             losses['total_loss'] += losses['ce_loss_%d'%ti]
             
             if ti == 0:
                 losses[f'dice_loss_{ti}'] = dice_loss(data[f'bmasks_{ti}'], data['cls_gt'][:,0,0]) # dice loss评估相似性 X交Y/X+Y
-                losses['total_loss'] += losses[f'dice_loss_{ti}']
-            elif ti == t - 1:
-                losses[f'dice_loss_{ti}'] = dice_loss(data[f'fmasks_{ti}'], data['cls_gt'][:,1,0]) # dice loss评估相似性 X交Y/X+Y
                 losses['total_loss'] += losses[f'dice_loss_{ti}']
             else:
                 if self.config['use_dice_align']:
@@ -162,7 +147,7 @@ class LossComputer:
                         losses[f'dice_loss_{ti}'] = dice_loss_between_mask(data[f'bmasks_{ti}'], data[f'flogits_{ti}'].detach())
                     losses['total_loss'] += losses[f'dice_loss_{ti}']
                 if it >= self.config['teacher_warmup']:
-                    if self.config['use_teacher_model']:
+                    if self.config['use_teacher_model'] and ti != t-1:
                         losses[f'sftf_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'fmasks_{ti}'], data[f't_flogits_{ti}'].detach())
                         losses[f'sbtb_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_blogits_{ti}'].detach())
                         losses['total_loss'] += losses[f'sftf_dice_loss_{ti}'] + losses[f'sbtb_dice_loss_{ti}']
