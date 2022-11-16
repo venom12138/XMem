@@ -339,6 +339,7 @@ class XMemTrainer:
             
             # [b, 1, max_num_obj, H, W]
             last_frame_gt = out[f'fmasks_{self.num_frames-1}'].unsqueeze(1)
+            t_last_frame_gt = out[f't_fmasks_{self.num_frames-1}'].unsqueeze(1)
             # print(f"last_frame_gt:{last_frame_gt.shape}")
             frames = torch.flip(frames, [1]) # [B,num_frames,C,H,W]
             key = torch.flip(key, [2])
@@ -378,7 +379,7 @@ class XMemTrainer:
             # frames是用最后一个
             v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, last_frame_gt[:,0])
             if self.config['use_teacher_model']:
-                t_v16, t_hidden = self.teacher_model('encode_value', frames[:,0], t_f16[:,0], t_hidden, last_frame_gt[:,0])
+                t_v16, t_hidden = self.teacher_model('encode_value', frames[:,0], t_f16[:,0], t_hidden, t_last_frame_gt[:,0])
                 t_values = t_v16.unsqueeze(3) # t_values
             # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
