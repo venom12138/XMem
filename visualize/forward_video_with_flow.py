@@ -49,23 +49,24 @@ config = {
     'fuser_type':'cbam',
 }
 
-ROOT_PATH = '/home/venom/data/EPIC_train_split'
-vid = 'P01_01_37'
+ROOT_PATH = '/home/venom/projects/XMem/val_data'
+vid = 'P01_14_343'
 use_flow = False 
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
-ckpt_path = '/home/venom/.exp/1108_Ablation/D0232_freeze=0,fuse_type=cbam,num_frames=8,steps=1000,use_text=0,use_flow=0/network_10000.pth'
+ckpt_path = '/home/venom/projects/XMem/saves/XMem.pth'
+# '/home/venom/.exp/1108_Ablation/D0232_freeze=0,fuse_type=cbam,num_frames=8,steps=1000,use_text=0,use_flow=0/network_10000.pth'
 if 'noflow' in ckpt_path:
     use_flow = False
     print('not use flow !!!!!!!!!!!')
 network = XMem(config, ckpt_path).eval().to(device)
 if use_flow:
-    mask_save_path = f'../visuals/{partition_id}/1111flow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/1111flow_draw/{video_id}/{vid}'
+    mask_save_path = f'../visuals/{partition_id}/1118_baseline_flow_mask/{video_id}/{vid}'
+    draw_save_path = f'../visuals/{partition_id}/1118_baseline_flow_draw/{video_id}/{vid}'
 else:
-    mask_save_path = f'../visuals/{partition_id}/1111noflow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/1111noflow_draw/{video_id}/{vid}'
+    mask_save_path = f'../visuals/{partition_id}/1118_baseline_noflow_mask/{video_id}/{vid}'
+    draw_save_path = f'../visuals/{partition_id}/1118_baseline_noflow_draw/{video_id}/{vid}'
 
 video_path = f'{ROOT_PATH}/{partition_id}/rgb_frames/{video_id}/{vid}'
 u_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/u'
@@ -82,7 +83,7 @@ if not os.path.isdir(draw_save_path):
 mask = np.array(Image.open(mask_name).convert('1'),dtype=np.int32)
 print(np.unique(mask))
 print(mask.shape)
-num_objects = len(np.unique(np.round(mask))) - 1 # objects的数量
+num_objects = len(np.unique(np.round(mask))) - 1 # objects number
 
 """# Propagte frame-by-frame"""
 
@@ -99,7 +100,7 @@ visualize_every = 20
 current_frame_index = 0
 
 with torch.cuda.amp.autocast(enabled=True):
-    for frame_path in sorted(glob.glob(f'{video_path}/*.jpg')):
+    for i, frame_path in enumerate(sorted(glob.glob(f'{video_path}/*.jpg'))):
         jpg_name = frame_path.split('/')[-1]
         if len(vid.split('_')[1]) == 2:
             flow_id = int(jpg_name.split('.')[0].split('_')[1])
@@ -146,29 +147,27 @@ with torch.cuda.amp.autocast(enabled=True):
         # 0,1
         prediction = torch_prob_to_numpy_mask(prediction)
         
-        plt.imsave(f"{mask_save_path}/{frame_path.split('/')[-1]}", prediction*255)
-        
-        # if current_frame_index % visualize_every == 0:
-        visualization = overlay_davis(frame, prediction)
-            # print(prediction.shape)
-            # print(visualization.shape)
-        plt.imsave(f"{draw_save_path}/{frame_path.split('/')[-1]}", visualization)
-        print(f"{draw_save_path}/{frame_path.split('/')[-1]}")
+        if i % 3 == 0:
+            plt.imsave(f"{mask_save_path}/{frame_path.split('/')[-1]}", prediction*255)
+            visualization = overlay_davis(frame, prediction)
+            
+            plt.imsave(f"{draw_save_path}/{frame_path.split('/')[-1]}", visualization)
+            print(f"{draw_save_path}/{frame_path.split('/')[-1]}")
 
         current_frame_index += 1
-# import imageio.v2 as imageio
-# images = []
-# for frame_path in sorted(glob.glob(f'{draw_save_path}/*.jpg')):
-#     im = imageio.imread(frame_path)
-#     images.append(im)
-# if use_flow:
-#     if not os.path.exists(f'../visuals/{partition_id}/flow_gif/{video_id}/'):
-#         os.makedirs(f'../visuals/{partition_id}/flow_gif/{video_id}/')
-#     imageio.mimsave(f'../visuals/{partition_id}/flow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
-# else:
-#     if not os.path.exists(f'../visuals/{partition_id}/noflow_gif/{video_id}/'):
-#         os.makedirs(f'../visuals/{partition_id}/noflow_gif/{video_id}/')
-#     imageio.mimsave(f'../visuals/{partition_id}/noflow_gif/{video_id}/{vid}.gif', images, 'GIF', duration=0.05)
+        
+import imageio.v2 as imageio
+images = []
+for frame_path in sorted(glob.glob(f'{draw_save_path}/*.jpg')):
+    im = imageio.imread(frame_path)
+    images.append(im)
+if use_flow:
+    # if not os.path.exists(f'../visuals/{partition_id}/flow_gif/{video_id}/'):
+    #     os.makedirs(f'../visuals/{partition_id}/flow_gif/{video_id}/')
+    imageio.mimsave(f'{draw_save_path}/{vid}.gif', images, 'GIF', duration=0.05)
+else:
+    
+    imageio.mimsave(f'{draw_save_path}/{vid}.gif', images, 'GIF', duration=0.05)
     
 
 # f'../visuals/{partition_id}/flow_draw/{video_id}/{vid}'
