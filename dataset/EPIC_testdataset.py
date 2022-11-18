@@ -8,7 +8,7 @@ from torchvision.transforms import InterpolationMode
 from PIL import Image
 import numpy as np
 import sys
-sys.path.append('/cluster/home2/yjw/venom/XMem')
+
 from dataset.range_transform import im_normalization, im_mean
 from dataset.reseed import reseed
 import yaml

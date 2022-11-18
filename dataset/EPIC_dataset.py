@@ -8,7 +8,7 @@ from torchvision.transforms import InterpolationMode
 from PIL import Image
 import numpy as np
 import sys
-sys.path.append('/cluster/home2/yjw/venom/XMem')
+
 from dataset.range_transform import im_normalization, im_mean
 from dataset.reseed import reseed
 import yaml
@@ -59,7 +59,7 @@ class EPICDataset(Dataset):
         self.pair_im_lone_transform = transforms.Compose([
             transforms.ColorJitter(0.01, 0.01, 0.01, 0),
         ])
-        # 仿射变换：平移旋转之类的
+        # Affine transformation: translation rotation and the like
         self.pair_im_dual_transform = transforms.Compose([
             transforms.RandomAffine(degrees=0 if finetune else 15, shear=0 if finetune else 10, interpolation=InterpolationMode.BILINEAR, fill=im_mean),
         ])
