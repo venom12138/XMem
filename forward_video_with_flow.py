@@ -31,7 +31,16 @@ import cv2
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
 
 torch.set_grad_enabled(False)
-
+def colorize_mask(mask):
+    # mask: numpy array of the mask
+    new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
+    # h,w = new_mask.size
+    palette = [0,0,0,255,255,255,128,0,0,0,128,0,0,0,128,255,0,0,255,255,0]
+    others = list(np.random.randint(0,255,size=256*3-len(palette)))
+    palette.extend(others)
+    new_mask.putpalette(palette)
+    return new_mask
+    
 # default configuration
 config = {
     'top_k': 30,
@@ -61,11 +70,11 @@ if 'noflow' in ckpt_path:
     print('not use flow !!!!!!!!!!!')
 network = XMem(config, ckpt_path).eval().to(device)
 if use_flow:
-    mask_save_path = f'../visuals/{partition_id}/1111flow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/1111flow_draw/{video_id}/{vid}'
+    mask_save_path = f'./visuals/{partition_id}/1111flow_mask/{video_id}/{vid}'
+    draw_save_path = f'./visuals/{partition_id}/1111flow_draw/{video_id}/{vid}'
 else:
-    mask_save_path = f'../visuals/{partition_id}/1111noflow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/1111noflow_draw/{video_id}/{vid}'
+    mask_save_path = f'./visuals/{partition_id}/1111noflow_mask/{video_id}/{vid}'
+    draw_save_path = f'./visuals/{partition_id}/1111noflow_draw/{video_id}/{vid}'
 
 video_path = f'{ROOT_PATH}/{partition_id}/rgb_frames/{video_id}/{vid}'
 u_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/u'
@@ -146,7 +155,9 @@ with torch.cuda.amp.autocast(enabled=True):
         # 0,1
         prediction = torch_prob_to_numpy_mask(prediction)
         
-        plt.imsave(f"{mask_save_path}/{frame_path.split('/')[-1]}", prediction*255)
+        mask = colorize_mask(prediction)
+        mask.save(f"{mask_save_path}/{frame_path.split('/')[-1].replace('jpg', 'png')}")
+        # plt.imsave(f"{mask_save_path}/{frame_path.split('/')[-1]}", prediction*255)
         
         # if current_frame_index % visualize_every == 0:
         visualization = overlay_davis(frame, prediction)
