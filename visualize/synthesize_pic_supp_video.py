@@ -25,12 +25,14 @@ for i in range(1, 7):
 print(f'max_length: {max_length}')
 w = 256
 h = 456
+back_ground_color = (0,0,0)
 font = cv2.FONT_HERSHEY_SIMPLEX
 for j in range(max_length):
     print(f'j:{j}')
-    output_img = np.zeros((2*w, h*3+150+20, 3), dtype=np.uint8)
+    output_img = np.ones((2*w, h*3+150+20, 3), dtype=np.uint8)*255
     cv2.putText(output_img, 'Baseline', (5, w//2), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 1, cv2.LINE_AA)
     cv2.putText(output_img, 'XMem+BAMT', (5, w//2 * 3), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 1, cv2.LINE_AA)
+    cv2.putText(output_img, '(Ours)', (5, w//2 * 3+30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 1, cv2.LINE_AA)
     # plt.imshow(output_img)
     # plt.show()
     
