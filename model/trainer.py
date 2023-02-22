@@ -27,7 +27,7 @@ from model.losses import LossComputer
 import matplotlib.pyplot as plt
 import wandb
 import clip
-
+from model.modules import RandomWalkHead
 class EMA():
     def __init__(self, beta, iterations):
         super().__init__()
@@ -79,6 +79,12 @@ class XMemTrainer:
                 self.teacher_model = nn.parallel.DataParallel(
                         deepcopy(network).cuda())
         
+        if config['use_randn_walk_loss']:
+            self.randn_walk_head = RandomWalkHead(key_dim = config['key_dim'], 
+                                                downsample = config['randn_walk_downsample'],
+                                                dropout_rate = config['randn_walk_droprate'],
+                                                temperature = config['randn_walk_temperature']).to(self.XMem.device)
+        
         # Set up logger when local_rank = 0
         self.logger = logger
         self.save_path = save_path
@@ -89,6 +95,7 @@ class XMemTrainer:
         self.train_integrator = Integrator(self.logger, distributed=True, local_rank=local_rank, world_size=world_size)
         self.loss_computer = LossComputer(config)
 
+        
         self.train()
         if self.config['use_text']:
             # freeze CLIP text encoder
@@ -133,6 +140,7 @@ class XMemTrainer:
         self.log_image_interval = config['log_image_interval']
         self.save_network_interval = config['save_network_interval']
         self.save_checkpoint_interval = config['save_checkpoint_interval']
+        
         # if config['debug']:
         #     self.log_text_interval = self.log_image_interval = 1
         #     self.save_network_interval = self.save_checkpoint_interval = 1
@@ -193,7 +201,11 @@ class XMemTrainer:
             # 正常的attention是query和key做内积，找出interest的区域，这里因为是frame - frame的对应，
             # 所以qk和mk的内积充当了key的角色，qe selection充当了query的角色
             key, shrinkage, selection, f16, f8, f4 = self.XMem('encode_key', frames)
-            
+            # key4walk, _, _, _, _, _ = self.XMem('encode_key', frames)
+            if self.config['use_randn_walk_loss']:
+                randn_walk_loss, rand_walk_loss_dict = self.randn_walk_head(key) # B C T H W
+                
+                
             if self.config['use_teacher_model']:
                 t_key, t_shrinkage, t_selection, t_f16, t_f8, t_f4 = self.teacher_model('encode_key', frames)
             
@@ -224,13 +236,17 @@ class XMemTrainer:
             # encode_value只对采样的clip中的第一个frame和mask进行计算
             # v16:[b, max_obj_num, value_dim, H//16, W//16]
             # hidden:[b, max_obj_num, hidden_dim, H//16, W//16]
+            
             v16, hidden = self.XMem('encode_value', frames[:,0], f16[:,0], hidden, first_frame_gt[:,0])
+            # randn_walk_loss.backward()
+            # print("randn_walk_loss has been backwarded!!\n\n")
+            
             if self.config['use_teacher_model']:
                 t_v16, t_hidden = self.teacher_model('encode_value', frames[:,0], t_f16[:,0], t_hidden, first_frame_gt[:,0])
                 t_values = t_v16.unsqueeze(3)
             # values:[b, max_obj_num, value_dim, 1, H//16, W//16]
             values = v16.unsqueeze(3) # add the time dimension
-
+            
             # forward video
             # 第0帧不用进行train，因为第0帧的mask已经给定了
             for ti in range(1, self.num_frames):
@@ -326,6 +342,7 @@ class XMemTrainer:
                 if self.config['use_teacher_model']:
                     out[f't_fmasks_{ti}'] = t_masks
                     out[f't_flogits_{ti}'] = t_logits
+            
 ###########################################################################################################
             # frames:[B,num_frames,C,H,W]
             # key:[B, key_dim, num_frames, H//16, W//16]
@@ -471,6 +488,8 @@ class XMemTrainer:
                 if self.config['use_teacher_model']:
                     out[f't_bmasks_{self.num_frames-ti-1}'] = t_masks
                     out[f't_blogits_{self.num_frames-ti-1}'] = t_logits
+                
+            
             
             # out[f'fmasks_0'] = first_frame_gt
             # out[f'bmasks_{self.num_frames-1}'] = last_frame_gt
@@ -479,8 +498,14 @@ class XMemTrainer:
             # blogits0和cls_gt0作cross_entropy
             # flogits_num_frames-1和cls_gt_num_frames-1作cross_entropy
             if self._do_log or self._is_train:
+                
+                # fuck_loss = torch.sum(feat4rand_walk[:,0,0,0,0])
+                # randn_walk_loss, rand_walk_loss_dict = self.rand_walk_loss_computer.compute_random_walk_loss(torch.flip(key, [2]))
                 losses = self.loss_computer.compute({**data, **out}, num_filled_objects, it)
-
+                # losses = dict()
+                # losses.update({'total_loss':fuck_loss})
+                losses['total_loss'] += randn_walk_loss.to(losses['total_loss'].device)
+                losses.update(rand_walk_loss_dict)
                 # Logging
                 if self._do_log:
                     self.integrator.add_dict(losses)

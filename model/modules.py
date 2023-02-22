@@ -23,6 +23,8 @@ from model.cbam import CBAM
 from torchsummary import summary
 from einops import rearrange
 
+EPS = 1e-20
+
 class FeatureFusionBlock(nn.Module):
     def __init__(self, x_in_dim, g_in_dim, g_mid_dim, g_out_dim):
         super().__init__()
@@ -431,6 +433,98 @@ class Decoder(nn.Module):
         # logits B x max_obj_num x 1 x H x W
         # hidden_state B x max_obj_num x 64 x H//16 x W//16
         return hidden_state, logits
+
+class RandomWalkHead(nn.Module):
+    def __init__(self, key_dim, downsample=0, dropout_rate=0.0, temperature=0.07):
+        super().__init__()
+        self.dropout_rate = dropout_rate
+        self.temperature = temperature
+        self._xent_targets = dict()
+        self.xent = nn.CrossEntropyLoss(reduction="none")
+        self.key_dim = key_dim
+        self.down_sample = downsample
+        if downsample:
+            self.downsample_head = nn.Sequential(*[nn.Conv2d(self.key_dim, self.key_dim,\
+                            kernel_size=1, stride=2, bias=False),
+                                nn.BatchNorm2d(self.key_dim)])
+        self.linear_head = nn.Linear(self.key_dim, 128)
+    
+    def cal_affinity(self, x1, x2):
+        in_t_dim = x1.ndim
+        if in_t_dim < 4:  # add in time dimension if not there
+            x1, x2 = x1.unsqueeze(-2), x2.unsqueeze(-2)
+
+        A = torch.einsum('bctn,bctm->btnm', x1, x2)
+
+        return A.squeeze(1) if in_t_dim < 4 else A
+
+    def stoch_mat(self, A, do_dropout=True):
+        ''' Affinity -> Stochastic Matrix '''
+
+        if do_dropout and self.dropout_rate > 0:
+            A[torch.rand_like(A) < self.dropout_rate] = -1e20
+
+        return F.softmax(A/self.temperature, dim=-1)
+
+    def xent_targets(self, A):
+        B, N = A.shape[:2]
+        key = '%s:%sx%s' % (str(A.device), B,N)
+
+        if key not in self._xent_targets:
+            I = torch.arange(A.shape[-1])[None].repeat(B, 1)
+            self._xent_targets[key] = I.view(-1).to(A.device)
+
+        return self._xent_targets[key]
+    
+    def forward(self, x):
+        # x: [B, key_dim, num_frames, H//16, W//16]
+        assert len(x.shape) == 5
+        x = x.transpose(1, 2) # [B, num_frames, key_dim, H//16, W//16]
+        b, t = x.shape[:2]
+        # flatten so that we can feed them into a 2D CNN
+        # frame:[B, num_frames, C, H, W] -> [B*num_frames, C, H, W]
+        x = x.flatten(start_dim=0, end_dim=1)
+        
+        if self.down_sample:
+            x = self.downsample_head(x) # [B*num_frames, C, H//32, W//32]
+        x = self.linear_head(x.permute(0,2,3,1)).permute(0,3,1,2)  # [B*num_frames, H//32, W//32, 128]
+        print("linear head is called!!!!!!!\n")
+        # print(f"self.linear:{self.linear_head.weight.}")
+        keys = x.view(b, t, *x.shape[-3:]).transpose(1, 2) # [B, 128, num_frames, H//32, W//32]
+        
+        keys = keys.view(keys.shape[0],keys.shape[1],keys.shape[2],-1) # B, C, T, N
+        keys = F.normalize(keys, p=2, dim=1)
+        B, C, T, N = keys.shape
+        walks = dict()
+        As = self.cal_affinity(keys[:, :, :-1], keys[:, :, 1:])
+        A12s = [self.stoch_mat(As[:, i], do_dropout=True) for i in range(T-1)]
+        
+        A21s = [self.stoch_mat(As[:, i].transpose(-1, -2), do_dropout=True) for i in range(T-1)]
+        AAs = []
+        for i in list(range(1, len(A12s))): # len就是T
+            g = A12s[:i+1] + A21s[:i+1][::-1]
+            aar = g[0]
+            for _a in g[1:]:
+                aar = aar @ _a
+            AAs.append((f"r{i}", aar))
+
+        for i, aa in AAs:
+            walks[f"cyc {i}"] = [aa, self.xent_targets(aa)]
+        
+        # Compute loss 
+        #################################################################
+        xents = 0
+        diags = dict()
+
+        for name, (A, target) in walks.items():
+            logits = torch.log(A+EPS).flatten(0, -2)
+            loss = self.xent(logits, target).mean()
+            acc = (torch.argmax(logits, dim=-1) == target).float().mean()
+            diags.update({f"rand_walk/xent_{name}": loss.detach(),
+                            f"rand_walk/acc_{name}": acc})
+            xents += loss
+        
+        return loss, diags
 
 if __name__ == '__main__':
     dummy_mv = torch.randn(1, 5, 3, 16, 16)

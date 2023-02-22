@@ -121,12 +121,18 @@ def get_EPIC_parser():
     parser.add_argument('--ts_all_align_loss', action='store_true')
     parser.add_argument('--teacher_loss_weight', default=0.1, type=float)
     parser.add_argument('--use_handmsk', default=0, type=int, choices=[0,1])
-    parser.add_argument('--use_flow', default=1, type=int, choices=[0,1])
+    parser.add_argument('--use_flow', default=0, type=int, choices=[0,1])
     parser.add_argument('--freeze', default=1, type=int, choices=[0,1])
     
     parser.add_argument('--openword_test', default=0, type=int, choices=[0,1])
     
     parser.add_argument('--fuser_type', default='cbam', type=str, choices=['cbam','cross_attention'])
+    
+    parser.add_argument('--use_randn_walk_loss', default=0, type=int, choices=[0,1])
+    parser.add_argument('--randn_walk_downsample', default=0, type=int, choices=[0,1])
+    parser.add_argument('--randn_walk_droprate', default=0.0, type=float)
+    parser.add_argument('--randn_walk_temperature', default=0.07, type=float)
+    
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
 

@@ -26,13 +26,13 @@ class XMem(nn.Module):
         """
         super().__init__()
         model_weights = self.init_hyperparameters(config, model_path, map_location)
-
+        self.config = config
         self.single_object = config.get('single_object', False)
         print(f'Single object mode: {self.single_object}')
 
         self.key_encoder = KeyEncoder() # R50 前三个stage: 
         self.value_encoder = ValueEncoder(self.value_dim, self.hidden_dim, self.single_object)            
-            
+        
         if config['use_text']:
             clip_model,_ = clip.load("ViT-L/14@336px") # clip.load("RN50")#  
             self.clip_text_encoder = nn.Module()
@@ -81,6 +81,7 @@ class XMem(nn.Module):
     @property
     def dtype(self):
         return self.key_encoder.conv1.weight.dtype
+    
     
     def encode_text(self, text):
         x = self.clip_text_encoder.token_embedding(text).type(torch.float16)  # [batch_size, n_ctx, d_model]
@@ -359,6 +360,10 @@ class XMem(nn.Module):
                 hand_new_weights = len(self.hand_encoder.state_dict().keys())
             else:
                 hand_new_weights = 0
-                
-            assert ((len(new_keys) == text_new_weights + flow_new_weights + value_fuser_new_weights + hand_new_weights) \
+            # if self.config['use_randn_walk_loss']:
+            #     rand_walk_new_weights = len(self.randn_walk_head.state_dict().keys())
+            # else:
+            #     rand_walk_new_weights = 0
+            assert ((len(new_keys) == text_new_weights + flow_new_weights + value_fuser_new_weights \
+                    + hand_new_weights ) \
                     or len(new_keys) == 0 )

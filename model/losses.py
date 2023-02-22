@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from collections import defaultdict
 import numpy as np
 
+
+
 def dice_loss(input_mask, cls_gt): # cls_gt is B x H x W
     num_objects = input_mask.shape[1] # input_mask is B x max_obj_num x H x W
     losses = []
@@ -116,7 +118,7 @@ class LossComputer:
         
         self.start_w = 1
         self.end_w = 0.0
-
+        
     def compute(self, data, num_objects, it):
         losses = defaultdict(int)
 
@@ -171,3 +173,81 @@ class LossComputer:
                             losses[f'sbtf_dice_loss_{ti}'] = self.config['teacher_loss_weight']*dice_loss_between_mask(data[f'bmasks_{ti}'], data[f't_flogits_{ti}'].detach())
                             losses['total_loss'] += losses[f'sftb_dice_loss_{ti}'] + losses[f'sbtf_dice_loss_{ti}']
         return losses
+
+
+# class Random_Walk_Loss:
+#     def __init__(self, dropout_rate=0.0, temperature=0.07):
+#         self.dropout_rate = dropout_rate
+#         self.temperature = temperature
+#         self._xent_targets = dict()
+#         self.xent = nn.CrossEntropyLoss(reduction="none")
+        
+#     def cal_affinity(self, x1, x2):
+#         in_t_dim = x1.ndim
+#         if in_t_dim < 4:  # add in time dimension if not there
+#             x1, x2 = x1.unsqueeze(-2), x2.unsqueeze(-2)
+
+#         A = torch.einsum('bctn,bctm->btnm', x1, x2)
+
+#         return A.squeeze(1) if in_t_dim < 4 else A
+
+#     def stoch_mat(self, A, do_dropout=True):
+#         ''' Affinity -> Stochastic Matrix '''
+
+#         if do_dropout and self.dropout_rate > 0:
+#             A[torch.rand_like(A) < self.dropout_rate] = -1e20
+
+#         return F.softmax(A/self.temperature, dim=-1)
+
+#     def xent_targets(self, A):
+#         B, N = A.shape[:2]
+#         key = '%s:%sx%s' % (str(A.device), B,N)
+
+#         if key not in self._xent_targets:
+#             I = torch.arange(A.shape[-1])[None].repeat(B, 1)
+#             self._xent_targets[key] = I.view(-1).to(A.device)
+
+#         return self._xent_targets[key]
+        
+#     def compute_random_walk_loss(self, keys):
+#         # keys: B, key_dim, num_frames, H//16, W//16
+#         keys = keys.view(keys.shape[0],keys.shape[1],keys.shape[2],-1) # B, C, T, N
+#         keys = F.normalize(keys, p=2, dim=1)
+#         B, C, T, N = keys.shape
+#         walks = dict()
+#         As = self.cal_affinity(keys[:, :, :-1], keys[:, :, 1:])
+#         A12s = [self.stoch_mat(As[:, i], do_dropout=True) for i in range(T-1)]
+        
+#         A21s = [self.stoch_mat(As[:, i].transpose(-1, -2), do_dropout=True) for i in range(T-1)]
+#         AAs = []
+#         for i in list(range(1, len(A12s))): # len就是T
+#             g = A12s[:i+1] + A21s[:i+1][::-1]
+#             aar = g[0]
+#             for _a in g[1:]:
+#                 aar = aar @ _a
+#             AAs.append((f"r{i}", aar))
+
+#         for i, aa in AAs:
+#             walks[f"cyc {i}"] = [aa, self.xent_targets(aa)]
+        
+#         # Compute loss 
+#         #################################################################
+#         xents = 0
+#         diags = dict()
+
+#         for name, (A, target) in walks.items():
+#             logits = torch.log(A+EPS).flatten(0, -2)
+#             loss = self.xent(logits, target).mean()
+#             acc = (torch.argmax(logits, dim=-1) == target).float().mean()
+#             diags.update({f"rand_walk/xent_{name}": loss.detach(),
+#                             f"rand_walk/acc_{name}": acc})
+#             xents += loss
+        
+#         return loss, diags
+
+if __name__ == '__main__':
+    keys = torch.rand(2, 256, 8, 24, 24)
+    rand_loss = Random_Walk_Loss()
+    loss, diags = rand_loss.compute_random_walk_loss(keys)
+    print(loss)
+    print(diags)
