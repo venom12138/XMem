@@ -77,12 +77,12 @@ def get_EPIC_parser():
     Batch sizes are effective -- you don't have to scale them when you scale the number processes
     """
     parser.add_argument('--batch_size', default=8, type=int)
-    parser.add_argument('--iterations', default=5000, type=int)
+    parser.add_argument('--iterations', default=10000, type=int)
     parser.add_argument('--finetune', default=0, type=int)
-    parser.add_argument('--steps', nargs="*", default=[1000,8000], type=int)
+    parser.add_argument('--steps', nargs="*", default=[1000,], type=int)
     parser.add_argument('--lr', help='Initial learning rate', default=1e-5, type=float)
     parser.add_argument('--num_ref_frames', default=3, type=int)
-    parser.add_argument('--num_frames', default=5, type=int)
+    parser.add_argument('--num_frames', default=8, type=int)
     parser.add_argument('--start_warm', default=500, type=int)
     parser.add_argument('--end_warm', default=3000, type=int)
 
