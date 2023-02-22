@@ -54,17 +54,20 @@ config = {
     'min_mid_term_frames': 5,
     'max_mid_term_frames': 10,
     'max_long_term_elements': 10000,
+    'use_text': False,
+    'use_flow': False,
+    'use_handmsk': False
 }
 
 network = XMem(config, '../saves/XMem.pth').eval().to(device)
 uid = 'P01_01_37'
 part = uid.split('_')[0]
 video_id = '_'.join(uid.split('_')[:2])
-mask_save_path = f'../visuals/backward_masks/{part}/{video_id}'
-draw_save_path = f'../visuals/backward_draws/{part}/{video_id}'
-video_path = f'/home/venom/projects/XMem/data/{part}/rgb_frames/{video_id}/{uid}'
+mask_save_path = f'../visuals/0131_backward_masks/{part}/{video_id}'
+draw_save_path = f'../visuals/0131_backward_draws/{part}/{video_id}'
+video_path = f'/home/venom/projects/State_Change_project/XMem/EPIC_train/{part}/rgb_frames/{video_id}/{uid}'
 # use first mask
-mask_name = f'/home/venom/projects/XMem/data/{part}/anno_masks/{video_id}/{uid}/frame_0000007320.png'
+mask_name = f'/home/venom/projects/State_Change_project/XMem/EPIC_train/P01/anno_masks/P01_01/P01_01_37/frame_0000007320.png'
 
 uid = video_path.split('/')[-1]
 

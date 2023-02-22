@@ -54,14 +54,17 @@ config = {
     'min_mid_term_frames': 5,
     'max_mid_term_frames': 10,
     'max_long_term_elements': 10000,
+    'use_text': False,
+    'use_flow': False,
+    'use_handmsk': False
 }
 
-network = XMem(config, '/home/venom/.exp/1105_retrain_XMem/D0209_freeze=0,fuse_type=cbam,num_frames=8,steps=1000,use_text=0,use_flow=1/network_10000.pth').eval().to(device)
+network = XMem(config, '../saves/XMem.pth').eval().to(device)
 uid = 'P01_01_37'
 part = uid.split('_')[0]
 video_id = '_'.join(uid.split('_')[:2])
-mask_save_path = f'../visuals/forward_masks/{part}/{video_id}'
-draw_save_path = f'../visuals/forward_draws/{part}/{video_id}'
+mask_save_path = f'../visuals/0131_forward_masks/{part}/{video_id}'
+draw_save_path = f'../visuals/0131_forward_draws/{part}/{video_id}'
 video_path = f'/home/venom/data/EPIC_train_split/P01/rgb_frames/P01_01/P01_01_37'
 # use first mask
 mask_name = f'/home/venom/data/EPIC_train_split/P01/anno_masks/P01_01/P01_01_37/frame_0000006341.png'
