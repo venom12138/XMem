@@ -462,7 +462,7 @@ class RandomWalkHead(nn.Module):
         ''' Affinity -> Stochastic Matrix '''
 
         if do_dropout and self.dropout_rate > 0:
-            A[torch.rand_like(A) < torch.tensor(self.dropout_rate).to(A.device)] = -1e20
+            A[torch.rand_like(A) < torch.tensor(self.dropout_rate).to(A.device).to(A.dtype)] = -1e20
 
         return F.softmax(A/self.temperature, dim=-1)
 
