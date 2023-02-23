@@ -126,8 +126,11 @@ class XMemTrainer:
         else:
             print('not freeze!!!')
 
-        self.optimizer = optim.AdamW(filter(
-            lambda p: p.requires_grad, self.XMem.parameters()), lr=config['lr'], weight_decay=config['weight_decay'])
+        model_param_group = [{'params': filter(lambda p: p.requires_grad, self.XMem.parameters())}]
+        if config['use_randn_walk_loss']:
+            model_param_group += [{'params': filter(lambda p: p.requires_grad, self.randn_walk_head.parameters())}]
+        
+        self.optimizer = optim.AdamW(model_param_group, lr=config['lr'], weight_decay=config['weight_decay'])
         if config['cos_lr']:
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, config['iterations']+config['finetune'])
         else:

@@ -462,7 +462,7 @@ class RandomWalkHead(nn.Module):
         ''' Affinity -> Stochastic Matrix '''
 
         if do_dropout and self.dropout_rate > 0:
-            A[torch.rand_like(A) < self.dropout_rate] = -1e20
+            A[torch.rand_like(A) < torch.tensor(self.dropout_rate).to(A.device)] = -1e20
 
         return F.softmax(A/self.temperature, dim=-1)
 
@@ -488,7 +488,7 @@ class RandomWalkHead(nn.Module):
         if self.down_sample:
             x = self.downsample_head(x) # [B*num_frames, C, H//32, W//32]
         x = self.linear_head(x.permute(0,2,3,1)).permute(0,3,1,2)  # [B*num_frames, H//32, W//32, 128]
-        print("linear head is called!!!!!!!\n")
+        # print("linear head is called!!!!!!!\n")
         # print(f"self.linear:{self.linear_head.weight.}")
         keys = x.view(b, t, *x.shape[-3:]).transpose(1, 2) # [B, 128, num_frames, H//32, W//32]
         
