@@ -562,7 +562,6 @@ class XMemTrainer:
                 # if it % self.save_checkpoint_interval == 0 and it != 0:
                 #     if self.logger is not None:
                 #         self.save_checkpoint(it)
-        
         # Backward pass
         self.optimizer.zero_grad(set_to_none=True)
         if self.config['amp']:
@@ -578,7 +577,7 @@ class XMemTrainer:
             if self.config['use_teacher_model']:
                 update_moving_average(self.ema_updater, self.teacher_model, self.XMem)
                 self.ema_updater.step()
-            
+        
     def save_network(self, it):
         if self.save_path is None:
             print('Saving has been disabled.')

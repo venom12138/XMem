@@ -462,8 +462,12 @@ class RandomWalkHead(nn.Module):
         ''' Affinity -> Stochastic Matrix '''
 
         if do_dropout and self.dropout_rate > 0:
-            A[torch.rand_like(A) < torch.tensor(self.dropout_rate).to(A.device).to(A.dtype)] = -1e20
-
+            # print(f"torch.rand_like(A): {torch.rand_like(A).dtype}")
+            # print(f"droprate: {torch.tensor(self.dropout_rate).to(torch.float16).dtype}")
+            # drop_r = torch.tensor(self.dropout_rate).to(torch.float16)
+            # selected_mat = torch.rand_like(A) < drop_r
+            A[torch.rand_like(A) < self.dropout_rate] = torch.tensor(-1e20).to(torch.float16)
+            
         return F.softmax(A/self.temperature, dim=-1)
 
     def xent_targets(self, A):
