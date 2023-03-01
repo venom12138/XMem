@@ -435,7 +435,7 @@ class Decoder(nn.Module):
         return hidden_state, logits
 
 class RandomWalkHead(nn.Module):
-    def __init__(self, key_dim, downsample_mode='none', dropout_rate=0.0, temperature=0.07):
+    def __init__(self, key_dim, downsample_mode='none', use_head=1, dropout_rate=0.0, temperature=0.07):
         super().__init__()
         self.dropout_rate = dropout_rate
         self.temperature = temperature
@@ -443,6 +443,7 @@ class RandomWalkHead(nn.Module):
         self.xent = nn.CrossEntropyLoss(reduction="none")
         self.key_dim = key_dim
         self.downsample_mode = downsample_mode
+        self.use_head = use_head
         if downsample_mode == 'conv':
             self.downsample_head = nn.Sequential(*[nn.Conv2d(self.key_dim, self.key_dim,\
                             kernel_size=1, stride=2, bias=False),
@@ -451,8 +452,9 @@ class RandomWalkHead(nn.Module):
             self.downsample_head = nn.AvgPool2d(kernel_size=4, stride=2, padding=2)
         else:
             assert downsample_mode == 'none'
-        self.linear_head = nn.Linear(self.key_dim, 128)
-    
+        if use_head:
+            self.linear_head = nn.Linear(self.key_dim, 128)
+        
     def cal_affinity(self, x1, x2):
         in_t_dim = x1.ndim
         if in_t_dim < 4:  # add in time dimension if not there
@@ -495,7 +497,8 @@ class RandomWalkHead(nn.Module):
         
         if self.downsample_mode == 'conv' or self.downsample_mode == 'pooling':
             x = self.downsample_head(x) # [B*num_frames, C, H//32, W//32]
-        x = self.linear_head(x.permute(0,2,3,1)).permute(0,3,1,2)  # [B*num_frames, H//32, W//32, 128]
+        if self.use_head:
+            x = self.linear_head(x.permute(0,2,3,1)).permute(0,3,1,2)  # [B*num_frames, H//32, W//32, 128]
         # print("linear head is called!!!!!!!\n")
         # print(f"self.linear:{self.linear_head.weight.}")
         keys = x.view(b, t, *x.shape[-3:]).transpose(1, 2) # [B, 128, num_frames, H//32, W//32]

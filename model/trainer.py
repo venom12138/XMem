@@ -82,6 +82,7 @@ class XMemTrainer:
         if config['use_randn_walk_loss']:
             self.randn_walk_head = RandomWalkHead(key_dim = config['key_dim'], 
                                                 downsample_mode = config['randn_walk_downsample'],
+                                                use_head = config['randn_walk_head'],
                                                 dropout_rate = config['randn_walk_droprate'],
                                                 temperature = config['randn_walk_temperature']).to(self.XMem.device)
         
@@ -507,7 +508,7 @@ class XMemTrainer:
                 losses = self.loss_computer.compute({**data, **out}, num_filled_objects, it)
                 # losses = dict()
                 # losses.update({'total_loss':fuck_loss})
-                losses['total_loss'] += randn_walk_loss.to(losses['total_loss'].device)
+                losses['total_loss'] += self.config['randn_walk_loss_rate']*randn_walk_loss.to(losses['total_loss'].device)
                 losses.update(rand_walk_loss_dict)
                 # Logging
                 if self._do_log:

@@ -129,6 +129,8 @@ def get_EPIC_parser():
     parser.add_argument('--fuser_type', default='cbam', type=str, choices=['cbam','cross_attention'])
     
     parser.add_argument('--use_randn_walk_loss', default=0, type=int, choices=[0,1])
+    parser.add_argument('--randn_walk_head', default=1, type=int, choices=[0,1])
+    parser.add_argument('--randn_walk_loss_rate', default=1.0, type=float) # loss 前面的系数
     parser.add_argument('--randn_walk_downsample', default='none', type=str, choices=['none', 'conv', 'pooling'])
     parser.add_argument('--randn_walk_droprate', default=0.0, type=float)
     parser.add_argument('--randn_walk_temperature', default=0.07, type=float)
