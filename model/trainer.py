@@ -81,7 +81,7 @@ class XMemTrainer:
         
         if config['use_randn_walk_loss']:
             self.randn_walk_head = RandomWalkHead(key_dim = config['key_dim'], 
-                                                downsample = config['randn_walk_downsample'],
+                                                downsample_mode = config['randn_walk_downsample'],
                                                 dropout_rate = config['randn_walk_droprate'],
                                                 temperature = config['randn_walk_temperature']).to(self.XMem.device)
         
