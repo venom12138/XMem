@@ -435,7 +435,7 @@ class Decoder(nn.Module):
         return hidden_state, logits
 
 class RandomWalkHead(nn.Module):
-    def __init__(self, key_dim, downsample_mode='none', use_head=1, dropout_rate=0.0, temperature=0.07):
+    def __init__(self, key_dim, downsample_mode='none', use_head=1, dropout_rate=0.0, temperature=0.07, **kwargs):
         super().__init__()
         self.dropout_rate = dropout_rate
         self.temperature = temperature
@@ -449,7 +449,7 @@ class RandomWalkHead(nn.Module):
                             kernel_size=1, stride=2, bias=False),
                                 nn.BatchNorm2d(self.key_dim)])
         elif downsample_mode == 'pooling':
-            self.downsample_head = nn.AvgPool2d(kernel_size=4, stride=2, padding=2)
+            self.downsample_head = nn.AvgPool2d(kernel_size=4, stride=kwargs['pooling_stride'], padding=2)
         else:
             assert downsample_mode == 'none'
         if use_head:

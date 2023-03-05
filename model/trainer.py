@@ -84,7 +84,8 @@ class XMemTrainer:
                                                 downsample_mode = config['randn_walk_downsample'],
                                                 use_head = config['randn_walk_head'],
                                                 dropout_rate = config['randn_walk_droprate'],
-                                                temperature = config['randn_walk_temperature']).to(self.XMem.device)
+                                                temperature = config['randn_walk_temperature'],
+                                                pooling_stride=config['randn_walk_pooling_stride']).to(self.XMem.device)
         
         # Set up logger when local_rank = 0
         self.logger = logger
