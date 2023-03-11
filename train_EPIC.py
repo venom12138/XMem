@@ -135,6 +135,7 @@ def get_EPIC_parser():
     parser.add_argument('--randn_walk_downsample', default='none', type=str, choices=['none', 'conv', 'pooling'])
     parser.add_argument('--randn_walk_droprate', default=0.0, type=float)
     parser.add_argument('--randn_walk_temperature', default=0.07, type=float)
+    parser.add_argument('--seed', default=14159265, type=int)
     
     args = parser.parse_args()
     return {**vars(args), **{'amp': not args.no_amp}, **{'use_flow': args.use_flow}}
@@ -160,9 +161,9 @@ torch.cuda.set_device(local_rank)
 print(f'I am rank {local_rank} in this world of size {world_size}!')
 
 # Set seed to ensure the same initialization
-torch.manual_seed(14159265)
-np.random.seed(14159265)
-random.seed(14159265)
+torch.manual_seed(config['seed'])
+np.random.seed(config['seed'])
+random.seed(config['seed'])
 
 config['single_object'] = False
 
