@@ -30,9 +30,18 @@ from progressbar import progressbar
 import cv2
 from inference.interact.interactive_utils import image_to_torch, index_numpy_to_one_hot_torch, torch_prob_to_numpy_mask, overlay_davis
 
-for mask_path in glob.glob('/home/venom/projects/fbrs_normal/output/P01/rgb_frames/P01_01/P01_01_37/*.png'):
-    frame_path = '/home/venom/projects/XMem/EPIC_train/P01/rgb_frames/P01_01/P01_01_37/' + mask_path.split('/')[-1].replace('.png', '.jpg')
+mask_root_path = '/u/ryanxli/venom/0228_aot-benchmark_eval/saves/EPIC/EPIC_val_0815_openword_wo_tune_SwinB_DeAOTL_PRE_ckpt_unknown/all'
+frame_root_path = '/u/ryanxli/venom/DeAOT/datasets/EPIC_val'
+video_key = 'P22_01_164'
+PART = video_key.split('_')[0]
+VIDEO_ID = '_'.join(video_key.split('_')[:2])
+save_path = '/u/ryanxli/venom/XMem/visuals/raw_DeAOT_img_visual'
+for mask_path in glob.glob(f'{mask_root_path}/{PART}/{VIDEO_ID}/{video_key}/*.png'):
+    frame_path = f'{frame_root_path}/{PART}/rgb_frames/{VIDEO_ID}/{video_key}/' + mask_path.split('/')[-1].replace('.png', '.jpg')
     frame = np.array(Image.open(frame_path))
     mask = np.array(Image.open(mask_path))
     visualization = overlay_davis(frame, mask)
-    plt.imsave(f"./{mask_path.split('/')[-1].replace('.png', '.jpg')}", visualization)
+    print(mask_path)
+    os.makedirs(f"{save_path}/{PART}/{VIDEO_ID}/{video_key}", exist_ok=True)
+    plt.imsave(f"{save_path}/{PART}/{VIDEO_ID}/{video_key}/{mask_path.split('/')[-1].replace('.png', '.jpg')}", visualization)
+    

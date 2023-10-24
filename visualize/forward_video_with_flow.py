@@ -49,24 +49,24 @@ config = {
     'fuser_type':'cbam',
 }
 
-ROOT_PATH = '/home/venom/projects/XMem/val_data'
-vid = 'P01_14_343'
-use_flow = False 
+ROOT_PATH = '/u/ryanxli/venom/XMem/val_data'
+vid = 'P29_05_351'
+use_flow = True 
 partition_id = vid.split('_')[0]
 video_id = partition_id + '_' + vid.split('_')[1]
 
-ckpt_path = '/home/venom/projects/XMem/saves/XMem.pth'
+ckpt_path = '/u/ryanxli/.exp/0925_state_change_segm/1015_flow_norm_aggregate_glow/D0119_steps=8000,use_text=0,use_flow=1/network_10000.pth'
 # '/home/venom/.exp/1108_Ablation/D0232_freeze=0,fuse_type=cbam,num_frames=8,steps=1000,use_text=0,use_flow=0/network_10000.pth'
 if 'noflow' in ckpt_path:
     use_flow = False
     print('not use flow !!!!!!!!!!!')
 network = XMem(config, ckpt_path).eval().to(device)
 if use_flow:
-    mask_save_path = f'../visuals/{partition_id}/1118_baseline_flow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/1118_baseline_flow_draw/{video_id}/{vid}'
+    mask_save_path = f'../visuals/{partition_id}/1015_flow_norm_aggregate_msk/{video_id}/{vid}'
+    draw_save_path = f'../visuals/{partition_id}/1015_flow_norm_aggregate_draw/{video_id}/{vid}'
 else:
-    mask_save_path = f'../visuals/{partition_id}/1118_baseline_noflow_mask/{video_id}/{vid}'
-    draw_save_path = f'../visuals/{partition_id}/1118_baseline_noflow_draw/{video_id}/{vid}'
+    mask_save_path = f'../visuals/{partition_id}/1015_flow_norm_aggregate_no_flow_msk/{video_id}/{vid}'
+    draw_save_path = f'../visuals/{partition_id}/1015_flow_norm_aggregate_no_flow_draw/{video_id}/{vid}'
 
 video_path = f'{ROOT_PATH}/{partition_id}/rgb_frames/{video_id}/{vid}'
 u_flow_path = f'{ROOT_PATH}/{partition_id}/flow_frames/{video_id}/{vid}/u'
